@@ -1,5 +1,5 @@
 {
-  "name": "chamcong-app",
+  "name": "chamcongonline",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -8,13 +8,13 @@
     "build": "vite build",
     "preview": "vite preview"
   },
- "dependencies": {
-  "react": "^19.0.0",
-  "react-dom": "^19.0.0",
-  "lucide-react": "^0.462.0",
-  "firebase": "^10.11.0",
-  "react-firebase-hooks": "^5.1.1"
-}
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.462.0",
+    "firebase": "^10.11.0",
+    "react-firebase-hooks": "^5.1.1"
+  },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
