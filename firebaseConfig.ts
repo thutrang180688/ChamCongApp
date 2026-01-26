@@ -7,12 +7,12 @@ import { getStorage } from "firebase/storage";
 // Your web app's Firebase configuration
 // 🔥 KEY CHÍNH XÁC TỪ FIREBASE CONSOLE - SỬA LỖI ĐĂNG NHẬP
 const firebaseConfig = {
-    apiKey: "AIzaSyAspK68BLdI14ygZtQfh6gIIVY0L1pV_qE", // ← COPY CHÍNH XÁC DÒNG NÀY
-    authDomain: "chamcongonline-7df7f.firebaseapp.com",
-    projectId: "chamcongonline-7df7f",
-    storageBucket: "chamcongonline-7df7f.firebasestorage.app",
-    messagingSenderId: "80878628372",
-    appId: "1:80878628372:web:480137f9899e7997aa8101"
+  apiKey: "AIzaSyAspKG80Ld1T4yg2tQfh0gIIVY0L1pV_qE",
+  authDomain: "chamcongonline-7df7f.firebaseapp.com",
+  projectId: "chamcongonline-7df7f",
+  storageBucket: "chamcongonline-7df7f.firebasestorage.app",
+  messagingSenderId: "80878628372",
+  appId: "1:80878628372:web:480137f9899e7997aa8101"
 };
 
 // Initialize Firebase
