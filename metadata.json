@@ -1,0 +1,5 @@
+{
+  "name": "Chấm CôngV7",
+  "description": "An advanced work schedule tracking system with automated attendance logic simulating Chrome extension integration, leave management, and seniority calculations.",
+  "requestFramePermissions": []
+}
