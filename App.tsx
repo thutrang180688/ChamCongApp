@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { DayType, AttendanceRecord, UserSettings } from './types';
 import { getDaysInMonth, formatId, VIETNAMESE_HOLIDAYS } from './utils/dateUtils';
@@ -17,8 +16,30 @@ import {
   FileCode,
   Signal,
   StickyNote,
-  User
+  User,
+  LogIn,
+  LogOut,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  Smartphone,
+  Laptop
 } from 'lucide-react';
+
+// Firebase imports
+import { auth, googleProvider, db } from './firebaseConfig';
+import { 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged,
+  User as FirebaseUser 
+} from 'firebase/auth';
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  updateDoc 
+} from 'firebase/firestore';
 
 const App: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -39,6 +60,13 @@ const App: React.FC = () => {
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Firebase states
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSynced, setLastSynced] = useState<string>('');
+  const [autoSync, setAutoSync] = useState(true);
 
   const STORAGE_KEY = 'worktrack_pro_local_v1';
   const SETTINGS_KEY = 'worktrack_pro_settings_v1';
@@ -65,6 +93,47 @@ const App: React.FC = () => {
     return () => channel.close();
   }, []);
 
+  // Firebase Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        triggerToast(`Chào ${currentUser.email}! Đang tải dữ liệu...`);
+        loadFromFirestore(currentUser.uid);
+      } else {
+        // Khi logout, load từ local storage
+        const storedData = localStorage.getItem(STORAGE_KEY);
+        if (storedData) {
+          setAttendance(JSON.parse(storedData));
+          triggerToast("Đang sử dụng dữ liệu local");
+        }
+      }
+    });
+    
+    return () => unsubscribe();
+  }, []);
+
+  // Auto-save to Firebase when data changes
+  useEffect(() => {
+    if (user && autoSync && Object.keys(attendance).length > 0) {
+      const timer = setTimeout(() => {
+        saveToFirestore();
+      }, 3000); // Delay 3 giây để tránh save liên tục
+      
+      return () => clearTimeout(timer);
+    }
+  }, [attendance, settings, user, autoSync]);
+
+  // Save to local storage when not logged in
+  useEffect(() => {
+    if (Object.keys(attendance).length > 0) {
+      if (!user) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(attendance));
+      }
+    }
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [attendance, settings, user]);
+
   const generateInitialData = useCallback((year: number) => {
     const seed: Record<string, AttendanceRecord> = {};
     for (let m = 0; m < 12; m++) {
@@ -89,6 +158,80 @@ const App: React.FC = () => {
     }
     return seed;
   }, []);
+
+  // Firebase Functions
+  const handleGoogleLogin = async () => {
+    try {
+      setIsLoading(true);
+      const result = await signInWithPopup(auth, googleProvider);
+      setUser(result.user);
+      triggerToast(`Đã đăng nhập với ${result.user.email}`);
+    } catch (error) {
+      console.error("Login error:", error);
+      triggerToast("Lỗi đăng nhập!");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      triggerToast("Đã đăng xuất");
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
+  const loadFromFirestore = async (userId: string) => {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const docSnap = await getDoc(userDocRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.attendance) setAttendance(data.attendance);
+        if (data.settings) setSettings(data.settings);
+        if (data.lastSynced) setLastSynced(data.lastSynced);
+        triggerToast("✅ Đã tải dữ liệu từ cloud!");
+      } else {
+        // First time user, save current data to Firestore
+        saveToFirestore();
+        triggerToast("👋 Chào mừng! Đã tạo dữ liệu cloud mới.");
+      }
+    } catch (error) {
+      console.error("Load error:", error);
+      triggerToast("Lỗi tải dữ liệu từ cloud!");
+    }
+  };
+
+  const saveToFirestore = async () => {
+    if (!user) return;
+    
+    try {
+      setIsSyncing(true);
+      const userDocRef = doc(db, 'users', user.uid);
+      const syncTime = new Date().toISOString();
+      
+      await setDoc(userDocRef, {
+        attendance,
+        settings,
+        lastSynced: syncTime,
+        email: user.email,
+        displayName: user.displayName || settings.userName,
+        updatedAt: syncTime
+      }, { merge: true });
+      
+      setLastSynced(syncTime);
+      triggerToast("✅ Đã đồng bộ lên cloud!");
+    } catch (error) {
+      console.error("Save error:", error);
+      triggerToast("Lỗi đồng bộ!");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const downloadExtensionFile = (fileName: string, content: string) => {
     try {
@@ -208,6 +351,11 @@ const App: React.FC = () => {
         if (parsed.attendance) setAttendance(parsed.attendance);
         if (parsed.settings) setSettings(parsed.settings);
         triggerToast("Nhập dữ liệu thành công!");
+        
+        // Auto save to Firebase if logged in
+        if (user) {
+          setTimeout(() => saveToFirestore(), 1000);
+        }
       } catch (err) {
         triggerToast("Lỗi: File không hợp lệ!");
       }
@@ -225,13 +373,6 @@ const App: React.FC = () => {
       setAttendance(generateInitialData(currentDate.getFullYear()));
     }
   }, [generateInitialData]);
-
-  useEffect(() => {
-    if (Object.keys(attendance).length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(attendance));
-    }
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [attendance, settings]);
 
   const calendarGrid = useMemo(() => {
     const month = currentDate.getMonth();
@@ -326,9 +467,15 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg"><Calendar size={20} /></div>
             <div className="flex flex-col">
-              <h1 className="font-black text-[10px] md:text-xs uppercase text-slate-400 tracking-wider -mb-1">Bảng chấm công {currentDate.getFullYear()}</h1>
+              <h1 className="font-black text-[10px] md:text-xs uppercase text-slate-400 tracking-wider -mb-1">
+                Bảng chấm công {currentDate.getFullYear()}
+                {user && <span className="text-emerald-500 ml-2">☁️ Đã kết nối cloud</span>}
+              </h1>
               <p className="font-black text-sm md:text-xl uppercase text-slate-900 tracking-tighter truncate max-w-[150px] md:max-w-md">
-                <span className="text-indigo-600">{settings.userName || 'Người dùng'}</span>
+                <span className="text-indigo-600">
+                  {user?.displayName || user?.email || settings.userName || 'Người dùng'}
+                </span>
+                {user && <span className="text-[10px] text-emerald-600 ml-2">✓</span>}
               </p>
             </div>
           </div>
@@ -336,6 +483,44 @@ const App: React.FC = () => {
             <button onClick={handleOptimize} className="group flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-amber-600 transition-all active:scale-95">
               <Zap size={16} fill="white" className="group-hover:animate-bounce" /> Tối ưu công
             </button>
+            
+            {/* Sync Button */}
+            {user && (
+              <button 
+                onClick={saveToFirestore}
+                disabled={isSyncing}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${isSyncing ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+              >
+                {isSyncing ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <Cloud size={16} />
+                )}
+                {isSyncing ? 'Đang đồng bộ...' : 'Lưu lên cloud'}
+              </button>
+            )}
+            
+            {/* Login/Logout Button */}
+            <button 
+              onClick={user ? handleLogout : handleGoogleLogin}
+              disabled={isLoading}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${user ? 'bg-rose-500 hover:bg-rose-600' : 'bg-blue-500 hover:bg-blue-600'} ${isLoading ? 'opacity-50' : ''}`}
+            >
+              {isLoading ? (
+                <RefreshCw size={16} className="animate-spin" />
+              ) : user ? (
+                <>
+                  <LogOut size={16} />
+                  Đăng xuất
+                </>
+              ) : (
+                <>
+                  <LogIn size={16} />
+                  Đăng nhập
+                </>
+              )}
+            </button>
+            
             <button onClick={() => setIsSettingsOpen(true)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
               <Settings size={22} />
             </button>
@@ -420,6 +605,91 @@ const App: React.FC = () => {
             <button onClick={() => setIsSettingsOpen(false)} className="absolute top-8 right-8 p-3 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"><X size={24} /></button>
             <h2 className="text-2xl font-black uppercase text-slate-900 mb-8 flex items-center gap-3"><Settings size={28} className="text-indigo-600" /> Cài đặt & Dữ liệu</h2>
             
+            {/* Cloud Sync Section */}
+            <div className="mb-8 p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-[2rem] text-white shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-white/20 p-3 rounded-2xl"><Cloud size={24} /></div>
+                  <div>
+                    <h3 className="font-black text-sm uppercase">Đồng bộ đám mây</h3>
+                    <p className="text-[10px] text-blue-100 italic">
+                      {user ? `Đang đăng nhập với: ${user.email}` : 'Chưa đăng nhập'}
+                    </p>
+                  </div>
+                </div>
+                <div className={`p-2 rounded-lg ${user ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+                  {user ? <Cloud size={20} /> : <CloudOff size={20} />}
+                </div>
+              </div>
+              
+              {user ? (
+                <div className="space-y-4">
+                  <div className="bg-white/10 p-4 rounded-xl">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-black uppercase">Tự động đồng bộ</span>
+                      <button 
+                        onClick={() => setAutoSync(!autoSync)}
+                        className={`w-12 h-6 rounded-full transition-all ${autoSync ? 'bg-emerald-500' : 'bg-slate-400'}`}
+                      >
+                        <div className={`w-5 h-5 rounded-full bg-white transform transition-transform ${autoSync ? 'translate-x-7' : 'translate-x-1'} mt-0.5`} />
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-blue-200">
+                      {autoSync ? 'Dữ liệu tự động lưu lên cloud' : 'Chỉ lưu khi nhấn nút'}
+                    </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={saveToFirestore}
+                      disabled={isSyncing}
+                      className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex flex-col items-center gap-2 border border-white/10 disabled:opacity-50"
+                    >
+                      {isSyncing ? (
+                        <RefreshCw size={18} className="animate-spin" />
+                      ) : (
+                        <Cloud size={18} />
+                      )}
+                      <span className="text-[10px] font-black uppercase">
+                        {isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}
+                      </span>
+                    </button>
+                    
+                    <button 
+                      onClick={() => user && loadFromFirestore(user.uid)}
+                      className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex flex-col items-center gap-2 border border-white/10"
+                    >
+                      <RefreshCw size={18} />
+                      <span className="text-[10px] font-black uppercase">Tải từ cloud</span>
+                    </button>
+                  </div>
+                  
+                  {lastSynced && (
+                    <div className="text-[9px] text-center text-blue-200 mt-2">
+                      Đồng bộ lần cuối: {new Date(lastSynced).toLocaleString('vi-VN')}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm mb-4">Đăng nhập để đồng bộ dữ liệu giữa các thiết bị</p>
+                  <button 
+                    onClick={handleGoogleLogin}
+                    disabled={isLoading}
+                    className="bg-white text-blue-600 px-6 py-3 rounded-xl font-black text-sm uppercase hover:bg-blue-50 transition-all flex items-center gap-3 mx-auto"
+                  >
+                    <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+                    {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập với Google'}
+                  </button>
+                  <p className="text-[9px] text-blue-200 mt-4">
+                    ✓ Dữ liệu an toàn trên Google Cloud<br />
+                    ✓ Đồng bộ tự động giữa máy tính & điện thoại<br />
+                    ✓ Miễn phí đến 1GB storage
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8 flex flex-col gap-4">
                <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
                   <div className="bg-indigo-600 p-3 rounded-2xl text-white"><User size={24} /></div>
