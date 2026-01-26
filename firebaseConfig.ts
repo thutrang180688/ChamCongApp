@@ -1,20 +1,20 @@
-// firebaseConfig.ts
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
-// Dán config từ Firebase Console vào đây
+// 🔥 DÙNG KEY CHÍNH XÁC TỪ FIREBASE CONSOLE
 const firebaseConfig = {
-  apiKey: "AIzaSyAspKG8BldI14yg2tQfh0gIIVY0L1pV_qE",
+  apiKey: "AIzaSyAspK68BLdI14ygZtQfh6gIIVY0L1pV_qE",
   authDomain: "chamcongonline-7df7f.firebaseapp.com",
   projectId: "chamcongonline-7df7f",
   storageBucket: "chamcongonline-7df7f.firebasestorage.app",
   messagingSenderId: "80878628372",
-  appId: "1:80878628372:web:480137f9899e7997aaa101"
+  appId: "1:80878628372:web:480137f9899e7997aa8101"
 };
 
-// Khởi tạo Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
+export const storage = getStorage(app);
+export default app;
