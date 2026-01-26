@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAspK68BLdI14ygZtQfh6gIIVY0L1pV_qE",
+  apiKey: "AIzaSyAspKG80Ld1T4yg2tQfh0gIIVY0L1pV_qE", // ← DÙNG KEY NÀY
   authDomain: "chamcongonline-7df7f.firebaseapp.com",
   projectId: "chamcongonline-7df7f",
   storageBucket: "chamcongonline-7df7f.firebasestorage.app",
