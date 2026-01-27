@@ -1,799 +1,236 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { DayType, AttendanceRecord, UserSettings } from './types';
-import { getDaysInMonth, formatId, VIETNAMESE_HOLIDAYS } from './utils/dateUtils';
-import DashboardStats from './components/DashboardStats';
-import { 
-  Calendar,
-  Settings,
-  X,
-  Download,
-  Upload,
-  CheckCircle2,
-  Cpu,
-  Chrome,
-  Zap,
-  FileJson,
-  FileCode,
-  Signal,
-  StickyNote,
-  User,
-  LogIn,
-  LogOut,
-  Cloud,
-  CloudOff,
-  RefreshCw,
-  Smartphone,
-  Laptop
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, TrendingUp, CheckCircle, XCircle, RefreshCw, CloudOff } from 'lucide-react';
+import { auth } from './firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
+import Header from './components/Header';
 
-// Firebase imports
-import { auth, googleProvider, db } from './firebaseConfig';
-import { 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged,
-  User as FirebaseUser 
-} from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc 
-} from 'firebase/firestore';
-
-const App: React.FC = () => {
+function App() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [settings, setSettings] = useState<UserSettings>({
-    userName: 'Người dùng',
-    initialAnnualLeave: 12,
-    seniorityDays: 0,
-    shiftCode: 'X1',
-    targetWorkingDays: 24,
-    autoSuggest: true,
-    lastYearUpdated: new Date().getFullYear()
-  });
+  const [totalDays, setTotalDays] = useState(24);
+  const [workedDays, setWorkedDays] = useState(19.5);
+  const [remainingLeave, setRemainingLeave] = useState(12);
+  const [isConnected, setIsConnected] = useState(true);
+  const [user, setUser] = useState<any>(null);
 
-  const [attendance, setAttendance] = useState<Record<string, AttendanceRecord>>({});
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [tempNote, setTempNote] = useState('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Firebase states
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSynced, setLastSynced] = useState<string>('');
-  const [autoSync, setAutoSync] = useState(true);
-
-  const STORAGE_KEY = 'worktrack_pro_local_v1';
-  const SETTINGS_KEY = 'worktrack_pro_settings_v1';
-
-  // Thiết lập kênh lắng nghe từ Extension
   useEffect(() => {
-    const channel = new BroadcastChannel('worktrack_extension_channel');
-    channel.onmessage = (event) => {
-      if (event.data.type === 'CLOCK_IN_PING') {
-        const todayStr = formatId(new Date());
-        setAttendance(prev => ({
-          ...prev,
-          [todayStr]: {
-            ...prev[todayStr],
-            type: DayType.WORK,
-            isAutoClocked: true,
-            isManual: false,
-            note: (prev[todayStr]?.note || '') + ' [Extension Auto-Clock]'
-          }
-        }));
-        triggerToast("🚀 Đã nhận tín hiệu chấm công từ Chrome Extension!");
-      }
-    };
-    return () => channel.close();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+    });
+    return unsubscribe;
   }, []);
 
-  // Firebase Auth Listener
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        triggerToast(`Chào ${currentUser.email}! Đang tải dữ liệu...`);
-        loadFromFirestore(currentUser.uid);
-      } else {
-        // Khi logout, load từ local storage
-        const storedData = localStorage.getItem(STORAGE_KEY);
-        if (storedData) {
-          setAttendance(JSON.parse(storedData));
-          triggerToast("Đang sử dụng dữ liệu local");
-        }
-      }
+  const progress = (workedDays / totalDays) * 100;
+
+  const daysInMonth = 31;
+  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const toggleConnection = () => {
+    setIsConnected(!isConnected);
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('vi-VN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
-    
-    return () => unsubscribe();
-  }, []);
-
-  // Auto-save to Firebase when data changes
-  useEffect(() => {
-    if (user && autoSync && Object.keys(attendance).length > 0) {
-      const timer = setTimeout(() => {
-        saveToFirestore();
-      }, 3000); // Delay 3 giây để tránh save liên tục
-      
-      return () => clearTimeout(timer);
-    }
-  }, [attendance, settings, user, autoSync]);
-
-  // Save to local storage when not logged in
-  useEffect(() => {
-    if (Object.keys(attendance).length > 0) {
-      if (!user) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(attendance));
-      }
-    }
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [attendance, settings, user]);
-
-  const generateInitialData = useCallback((year: number) => {
-    const seed: Record<string, AttendanceRecord> = {};
-    for (let m = 0; m < 12; m++) {
-      const days = getDaysInMonth(m, year);
-      days.forEach(d => {
-        const id = formatId(d);
-        const dayOfWeek = d.getDay();
-        const holidayName = VIETNAMESE_HOLIDAYS[id];
-        
-        let type = (dayOfWeek === 0 || dayOfWeek === 6) ? DayType.DAY_OFF : DayType.WORK;
-        if (holidayName) type = DayType.PUBLIC_HOLIDAY;
-
-        seed[id] = { 
-          date: id, 
-          type, 
-          chromeActiveTime: 0, 
-          isAutoClocked: false, 
-          isManual: false, 
-          note: holidayName || '' 
-        };
-      });
-    }
-    return seed;
-  }, []);
-
-  // Firebase Functions
-  const handleGoogleLogin = async () => {
-    try {
-      setIsLoading(true);
-      const result = await signInWithPopup(auth, googleProvider);
-      setUser(result.user);
-      triggerToast(`Đã đăng nhập với ${result.user.email}`);
-    } catch (error) {
-      console.error("Login error:", error);
-      triggerToast("Lỗi đăng nhập!");
-    } finally {
-      setIsLoading(false);
-    }
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setUser(null);
-      triggerToast("Đã đăng xuất");
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
-
-  const loadFromFirestore = async (userId: string) => {
-    try {
-      const userDocRef = doc(db, 'users', userId);
-      const docSnap = await getDoc(userDocRef);
-      
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.attendance) setAttendance(data.attendance);
-        if (data.settings) setSettings(data.settings);
-        if (data.lastSynced) setLastSynced(data.lastSynced);
-        triggerToast("✅ Đã tải dữ liệu từ cloud!");
-      } else {
-        // First time user, save current data to Firestore
-        saveToFirestore();
-        triggerToast("👋 Chào mừng! Đã tạo dữ liệu cloud mới.");
-      }
-    } catch (error) {
-      console.error("Load error:", error);
-      triggerToast("Lỗi tải dữ liệu từ cloud!");
-    }
-  };
-
-  const saveToFirestore = async () => {
-    if (!user) return;
-    
-    try {
-      setIsSyncing(true);
-      const userDocRef = doc(db, 'users', user.uid);
-      const syncTime = new Date().toISOString();
-      
-      await setDoc(userDocRef, {
-        attendance,
-        settings,
-        lastSynced: syncTime,
-        email: user.email,
-        displayName: user.displayName || settings.userName,
-        updatedAt: syncTime
-      }, { merge: true });
-      
-      setLastSynced(syncTime);
-      triggerToast("✅ Đã đồng bộ lên cloud!");
-    } catch (error) {
-      console.error("Save error:", error);
-      triggerToast("Lỗi đồng bộ!");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const downloadExtensionFile = (fileName: string, content: string) => {
-    try {
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      triggerToast(`Đã tải xuống ${fileName}`);
-    } catch (e) {
-      console.error(e);
-      triggerToast("Lỗi khi tải file!");
-    }
-  };
-
-  const handleOptimize = () => {
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth();
-    const daysInMonth = getDaysInMonth(currentMonth, currentYear);
-    const newAttendance = { ...attendance };
-    const target = settings.targetWorkingDays || 24;
-    const todayStr = formatId(new Date());
-
-    const totalAllowedAL = Number(settings.initialAnnualLeave || 0) + Number(settings.seniorityDays || 0);
-    const alUsedOtherMonths = Object.keys(attendance).reduce((acc, id) => {
-      const d = new Date(id);
-      if (d.getFullYear() === currentYear && d.getMonth() !== currentMonth) {
-        if (attendance[id].type === DayType.ANNUAL_LEAVE) return acc + 1;
-        if (attendance[id].type === DayType.HALF_ANNUAL_LEAVE) return acc + 0.5;
-      }
-      return acc;
-    }, 0);
-
-    let remainingAL = Math.max(0, totalAllowedAL - alUsedOtherMonths);
-
-    daysInMonth.forEach(d => {
-      const id = formatId(d);
-      if (newAttendance[id]?.isManual) return; 
-
-      const dayOfWeek = d.getDay();
-      const holidayName = VIETNAMESE_HOLIDAYS[id];
-
-      // Reset trạng thái tự động cũ để không bị lặp icon
-      newAttendance[id] = { ...newAttendance[id], isAutoClocked: false };
-
-      if (holidayName) {
-        newAttendance[id] = { ...newAttendance[id], type: DayType.PUBLIC_HOLIDAY, note: holidayName };
-      } else if (dayOfWeek === 0) {
-        newAttendance[id] = { ...newAttendance[id], type: DayType.DAY_OFF };
-      } else if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-        newAttendance[id] = { ...newAttendance[id], type: DayType.WORK };
-        if (id === todayStr) newAttendance[id].isAutoClocked = true; 
-      } else {
-        newAttendance[id] = { ...newAttendance[id], type: DayType.DAY_OFF };
-      }
-    });
-
-    const calculateCurrentTotal = () => daysInMonth.reduce((acc, d) => {
-      const id = formatId(d);
-      const type = newAttendance[id]?.type;
-      if ([DayType.WORK, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SH].includes(type)) return acc + 1;
-      if ([DayType.HALF_ANNUAL_LEAVE, DayType.HALF_WORK].includes(type)) return acc + 0.5;
-      return acc;
-    }, 0);
-
-    let currentTotal = calculateCurrentTotal();
-    const saturdays = daysInMonth.filter(d => d.getDay() === 6 && !VIETNAMESE_HOLIDAYS[formatId(d)] && !newAttendance[formatId(d)]?.isManual);
-
-    for (const sat of saturdays) {
-      if (currentTotal >= target || remainingAL <= 0) break;
-      const id = formatId(sat);
-      newAttendance[id] = { ...newAttendance[id], type: DayType.ANNUAL_LEAVE };
-      if (id === todayStr) newAttendance[id].isAutoClocked = true;
-      currentTotal += 1;
-      remainingAL -= 1;
-    }
-
-    for (const sat of saturdays) {
-      if (currentTotal >= target) break;
-      const id = formatId(sat);
-      if (newAttendance[id].type === DayType.DAY_OFF) {
-        newAttendance[id] = { ...newAttendance[id], type: DayType.WORK };
-        if (id === todayStr) newAttendance[id].isAutoClocked = true;
-        currentTotal += 1;
-      }
-    }
-
-    setAttendance(newAttendance);
-    triggerToast(`Đã tối ưu: T2-T6 làm việc, bù Thứ 7 cho đủ ${target} công.`);
-  };
-
-  const handleExport = () => {
-    const data = JSON.stringify({ attendance, settings }, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ChamCong_${settings.userName.replace(/\s+/g, '_')}_${formatId(new Date())}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    triggerToast("Đã xuất file dữ liệu JSON!");
-  };
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const parsed = JSON.parse(event.target?.result as string);
-        if (parsed.attendance) setAttendance(parsed.attendance);
-        if (parsed.settings) setSettings(parsed.settings);
-        triggerToast("Nhập dữ liệu thành công!");
-        
-        // Auto save to Firebase if logged in
-        if (user) {
-          setTimeout(() => saveToFirestore(), 1000);
-        }
-      } catch (err) {
-        triggerToast("Lỗi: File không hợp lệ!");
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  useEffect(() => {
-    const storedSettings = localStorage.getItem(SETTINGS_KEY);
-    const storedData = localStorage.getItem(STORAGE_KEY);
-    if (storedSettings) setSettings(JSON.parse(storedSettings));
-    if (storedData) {
-      setAttendance(JSON.parse(storedData));
-    } else {
-      setAttendance(generateInitialData(currentDate.getFullYear()));
-    }
-  }, [generateInitialData]);
-
-  const calendarGrid = useMemo(() => {
-    const month = currentDate.getMonth();
-    const year = currentDate.getFullYear();
-    const days = getDaysInMonth(month, year);
-    const firstDayDate = new Date(year, month, 1);
-    const firstDayOfWeek = firstDayDate.getDay(); 
-    const startOffset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-    const grid = [];
-    for (let i = 0; i < startOffset; i++) grid.push(null);
-    return [...grid, ...days];
-  }, [currentDate]);
-
-  const stats = useMemo(() => {
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth();
-    const daysInMonth = getDaysInMonth(currentMonth, currentYear);
-    const todayStr = formatId(new Date());
-    
-    let completedWorkDays = 0;
-    let totalCalculatedDays = 0;
-
-    daysInMonth.forEach(date => {
-      const id = formatId(date);
-      const record = attendance[id];
-      if (!record) return;
-      const isCountable = [DayType.WORK, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SH].includes(record.type);
-      const isHalfCountable = [DayType.HALF_ANNUAL_LEAVE, DayType.HALF_WORK].includes(record.type);
-
-      if (isCountable) {
-        totalCalculatedDays += 1;
-        if (id <= todayStr) completedWorkDays += 1;
-      } else if (isHalfCountable) {
-        totalCalculatedDays += 0.5;
-        if (id <= todayStr) completedWorkDays += 0.5;
-      }
-    });
-
-    const usedLeave = Object.values(attendance).reduce((acc: number, r: AttendanceRecord) => {
-      const rYear = new Date(r.date).getFullYear();
-      if (rYear === currentYear) {
-        if (r.type === DayType.ANNUAL_LEAVE) return acc + 1;
-        if (r.type === DayType.HALF_ANNUAL_LEAVE) return acc + 0.5;
-      }
-      return acc;
-    }, 0);
-
-    return { 
-      totalLeave: Number(settings.initialAnnualLeave || 0) + Number(settings.seniorityDays || 0), 
-      usedLeave, totalCalculatedDays, completedWorkDays 
-    };
-  }, [attendance, currentDate, settings]);
-
-  const triggerToast = (msg: string) => {
-    setToastMsg(msg);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
-  };
-
-  const updateDay = (dateStr: string, type: DayType) => {
-    setAttendance(prev => ({ 
-      ...prev, 
-      [dateStr]: { ...prev[dateStr], type, isManual: true, isAutoClocked: false, note: tempNote } 
-    }));
-    setSelectedDay(null);
-  };
-
-  const simulateExtensionPing = () => {
-    const channel = new BroadcastChannel('worktrack_extension_channel');
-    channel.postMessage({ type: 'CLOCK_IN_PING' });
-    channel.close();
-  };
-
-  const getDayLabel = (type: DayType) => {
-    switch (type) {
-      case DayType.WORK: return settings.shiftCode;
-      case DayType.HALF_WORK: return `1/2 ${settings.shiftCode}`;
-      default: return type;
-    }
-  };
+  const monthYear = currentDate.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      {showToast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold text-xs md:text-sm animate-in fade-in slide-in-from-top-4">
-          <CheckCircle2 className="text-emerald-400" size={18} /> {toastMsg}
-        </div>
-      )}
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      {/* Header Component - TRUYỀN USER NAME */}
+      <Header userName={user?.displayName || user?.email || ''} />
 
-      <header className="bg-white/95 ios-blur sticky top-0 z-40 px-4 md:px-10 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto h-16 md:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg"><Calendar size={20} /></div>
-            <div className="flex flex-col">
-              <h1 className="font-black text-[10px] md:text-xs uppercase text-slate-400 tracking-wider -mb-1">
-                Bảng chấm công {currentDate.getFullYear()}
-                {user && <span className="text-emerald-500 ml-2">☁️ Đã kết nối cloud</span>}
-              </h1>
-              <p className="font-black text-sm md:text-xl uppercase text-slate-900 tracking-tighter truncate max-w-[150px] md:max-w-md">
-                <span className="text-indigo-600">
-                  {user?.displayName || user?.email || settings.userName || 'Người dùng'}
-                </span>
-                {user && <span className="text-[10px] text-emerald-600 ml-2">✓</span>}
-              </p>
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
+        {/* Stats Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">ĐÃ CHẤM</p>
+                <p className="text-2xl font-bold text-blue-600">{workedDays} công</p>
+              </div>
+              <CheckCircle className="text-green-500" size={24} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={handleOptimize} className="group flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-amber-600 transition-all active:scale-95">
-              <Zap size={16} fill="white" className="group-hover:animate-bounce" /> Tối ưu công
-            </button>
-            
-            {/* Sync Button */}
-            {user && (
+          
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">ĐỦ ĐIỀU KIỆN</p>
+                <p className="text-2xl font-bold text-green-600">{totalDays} ngày</p>
+              </div>
+              <Calendar className="text-green-500" size={24} />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">CẦN THÊM</p>
+                <p className="text-2xl font-bold text-amber-600">{Math.max(0, totalDays - workedDays)} công</p>
+              </div>
+              <TrendingUp className="text-amber-500" size={24} />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">PHÉP CÒN LẠI</p>
+                <p className="text-2xl font-bold text-purple-600">{remainingLeave} ngày</p>
+              </div>
+              <Clock className="text-purple-500" size={24} />
+            </div>
+          </div>
+        </div>
+
+        {/* Progress and Calendar */}
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* Progress Section */}
+          <div className="md:col-span-2 bg-white rounded-xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold">Tiến độ tháng {monthYear}</h2>
               <button 
-                onClick={saveToFirestore}
-                disabled={isSyncing}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${isSyncing ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                onClick={toggleConnection}
+                className={`flex items-center gap-2 px-3 py-1 rounded-lg ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
               >
-                {isSyncing ? (
-                  <RefreshCw size={16} className="animate-spin" />
+                {isConnected ? (
+                  <>
+                    <CheckCircle size={16} />
+                    <span>Đang đồng bộ</span>
+                  </>
                 ) : (
-                  <Cloud size={16} />
+                  <>
+                    <CloudOff size={16} />
+                    <span>Ngắt kết nối</span>
+                  </>
                 )}
-                {isSyncing ? 'Đang đồng bộ...' : 'Lưu lên cloud'}
               </button>
-            )}
+            </div>
             
-            {/* Login/Logout Button */}
-            <button 
-              onClick={user ? handleLogout : handleGoogleLogin}
-              disabled={isLoading}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${user ? 'bg-rose-500 hover:bg-rose-600' : 'bg-blue-500 hover:bg-blue-600'} ${isLoading ? 'opacity-50' : ''}`}
-            >
-              {isLoading ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : user ? (
-                <>
-                  <LogOut size={16} />
-                  Đăng xuất
-                </>
-              ) : (
-                <>
-                  <LogIn size={16} />
-                  Đăng nhập
-                </>
-              )}
-            </button>
-            
-            <button onClick={() => setIsSettingsOpen(true)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
-              <Settings size={22} />
-            </button>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto flex justify-between gap-1 pb-4 pt-1 overflow-x-auto no-scrollbar">
-          {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
-            <button key={m} onClick={() => { const d = new Date(currentDate); d.setMonth(m-1); setCurrentDate(d); }}
-              className={`min-w-[45px] md:min-w-[65px] flex-1 py-2.5 rounded-lg text-xs md:text-sm font-black border transition-all ${currentDate.getMonth() === m-1 ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}
-            >{m}</button>
-          ))}
-        </div>
-      </header>
+            <div className="mb-6">
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Hoàn thành</span>
+                <span className="font-semibold">{progress.toFixed(1)}%</span>
+              </div>
+              <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between mt-2 text-sm text-gray-500">
+                <span>0%</span>
+                <span>100%</span>
+              </div>
+            </div>
 
-      <main className="flex-grow max-w-7xl mx-auto w-full px-4 md:px-10 py-6 pb-24">
-        <DashboardStats 
-          totalLeave={stats.totalLeave} usedLeave={stats.usedLeave} monthlyWorkDays={0}
-          totalCalculatedDays={stats.totalCalculatedDays} targetDays={settings.targetWorkingDays} completedWorkDays={stats.completedWorkDays}
-        />
-
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden mb-8">
-          <div className="p-4 grid grid-cols-7 border-b border-slate-100 bg-slate-50/50 font-black text-[10px] text-slate-400 uppercase text-center">
-            {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(d => <div key={d} className={d === 'CN' ? 'text-rose-500' : ''}>{d}</div>)}
-          </div>
-          <div className="p-2 md:p-4 grid grid-cols-7 gap-1 md:gap-3">
-            {calendarGrid.map((date, idx) => {
-              if (!date) return <div key={`empty-${idx}`} className="min-h-[85px] md:min-h-[140px] opacity-0" />;
-              const id = formatId(date);
-              const record = attendance[id];
-              const isToday = id === formatId(new Date());
-              const holiday = VIETNAMESE_HOLIDAYS[id];
-              const isSunday = date.getDay() === 0;
-              const hasNote = record?.note && record.note !== holiday;
-              
-              return (
-                <button key={id} onClick={() => { setSelectedDay(id); setTempNote(record?.note || ''); }}
-                  className={`min-h-[85px] md:min-h-[140px] p-2 md:p-4 rounded-xl md:rounded-3xl border flex flex-col relative text-left transition-all ${
-                    [DayType.WORK, DayType.HALF_WORK].includes(record?.type) ? 'bg-white border-slate-100' : 
-                    record?.type === DayType.DAY_OFF ? 'bg-rose-50 border-rose-100' : 
-                    [DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE].includes(record?.type) ? 'bg-emerald-50 border-emerald-100' : 
-                    record?.type === DayType.PUBLIC_HOLIDAY ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-transparent'
-                  } ${isToday ? 'ring-2 ring-indigo-500 shadow-lg z-10' : ''}`}
-                >
-                  <div className="flex justify-between items-start">
-                    <span className={`text-sm md:text-xl font-black ${isSunday || holiday ? 'text-rose-500' : 'text-slate-800'}`}>{date.getDate()}</span>
-                    {record?.isAutoClocked && isToday && (
-                      <div className="bg-indigo-600 text-white p-1 rounded-md shadow-md animate-bounce">
-                        <Cpu size={14} />
-                      </div>
-                    )}
+            {/* Calendar */}
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold mb-4">Lịch chấm công</h3>
+              <div className="grid grid-cols-7 gap-2">
+                {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((day) => (
+                  <div key={day} className="text-center font-medium text-gray-500 py-2">
+                    {day}
                   </div>
-                  
-                  <div className="flex-grow mt-1 flex flex-col gap-0.5">
-                    {holiday && <span className="text-[7px] md:text-[9px] font-bold text-rose-600 truncate">{holiday}</span>}
-                    {hasNote && (
-                      <div className="flex items-start gap-1 text-[7px] md:text-[10px] text-slate-500 font-medium italic leading-tight">
-                        <StickyNote size={8} className="mt-0.5 flex-shrink-0 text-amber-500" />
-                        <span className="line-clamp-2">{record.note}</span>
-                      </div>
-                    )}
-                  </div>
+                ))}
+                
+                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                  <div key={`empty-${i}`} className="h-12"></div>
+                ))}
+                
+                {daysArray.map((day) => {
+                  const isWorked = day <= workedDays * (31 / totalDays);
+                  const isToday = day === currentDate.getDate();
+                  return (
+                    <div key={day} className={`h-12 rounded-lg flex flex-col items-center justify-center ${
+                      isToday ? 'bg-blue-100 border-2 border-blue-500' :
+                      isWorked ? 'bg-green-100' : 'bg-gray-100'
+                    }`}>
+                      <span className={`font-medium ${isToday ? 'text-blue-700' : ''}`}>{day}</span>
+                      {isWorked && (
+                        <div className="flex gap-0.5 mt-1">
+                          <div className="w-1 h-1 bg-green-500 rounded-full"></div>
+                          <div className="w-1 h-1 bg-green-500 rounded-full"></div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
 
-                  <div className="mt-auto pt-1">
-                    <span className={`text-[7px] md:text-xs font-black px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg uppercase w-fit inline-block ${
-                        [DayType.WORK, DayType.HALF_WORK].includes(record?.type) ? 'bg-indigo-100 text-indigo-700' : 
-                        [DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE].includes(record?.type) ? 'bg-emerald-100 text-emerald-700' : 
-                        record?.type === DayType.PUBLIC_HOLIDAY ? 'bg-rose-100 text-rose-700' :
-                        'bg-slate-200 text-slate-600'}`}>
-                      {getDayLabel(record?.type)}
+          {/* Side Panel */}
+          <div className="space-y-6">
+            {/* Date Info */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Hôm nay</h3>
+                <RefreshCw className="text-gray-400" size={20} />
+              </div>
+              <p className="text-gray-600 mb-2">{formatDate(currentDate)}</p>
+              <div className="flex items-center gap-2">
+                <Clock className="text-blue-500" size={20} />
+                <span className="text-lg font-semibold">08:00 - 17:30</span>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+              <h3 className="text-lg font-semibold mb-4">Thao tác nhanh</h3>
+              <div className="space-y-3">
+                <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition">
+                  Chấm công vào
+                </button>
+                <button className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition">
+                  Chấm công ra
+                </button>
+                <button className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-lg font-medium transition">
+                  Xin nghỉ phép
+                </button>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+              <h3 className="text-lg font-semibold mb-4">Trạng thái hệ thống</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Cloud sync</span>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className={isConnected ? 'text-green-600' : 'text-red-600'}>
+                      {isConnected ? 'Đang hoạt động' : 'Ngắt kết nối'}
                     </span>
                   </div>
-                </button>
-              );
-            })}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Database</span>
+                  <span className="text-green-600">✓ Online</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Lần cập nhật cuối</span>
+                  <span className="text-blue-600">5 phút trước</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </main>
+      </div>
 
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsSettingsOpen(false)}>
-          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setIsSettingsOpen(false)} className="absolute top-8 right-8 p-3 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"><X size={24} /></button>
-            <h2 className="text-2xl font-black uppercase text-slate-900 mb-8 flex items-center gap-3"><Settings size={28} className="text-indigo-600" /> Cài đặt & Dữ liệu</h2>
-            
-            {/* Cloud Sync Section */}
-            <div className="mb-8 p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-[2rem] text-white shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="bg-white/20 p-3 rounded-2xl"><Cloud size={24} /></div>
-                  <div>
-                    <h3 className="font-black text-sm uppercase">Đồng bộ đám mây</h3>
-                    <p className="text-[10px] text-blue-100 italic">
-                      {user ? `Đang đăng nhập với: ${user.email}` : 'Chưa đăng nhập'}
-                    </p>
-                  </div>
-                </div>
-                <div className={`p-2 rounded-lg ${user ? 'bg-emerald-500' : 'bg-rose-500'}`}>
-                  {user ? <Cloud size={20} /> : <CloudOff size={20} />}
-                </div>
-              </div>
-              
-              {user ? (
-                <div className="space-y-4">
-                  <div className="bg-white/10 p-4 rounded-xl">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-black uppercase">Tự động đồng bộ</span>
-                      <button 
-                        onClick={() => setAutoSync(!autoSync)}
-                        className={`w-12 h-6 rounded-full transition-all ${autoSync ? 'bg-emerald-500' : 'bg-slate-400'}`}
-                      >
-                        <div className={`w-5 h-5 rounded-full bg-white transform transition-transform ${autoSync ? 'translate-x-7' : 'translate-x-1'} mt-0.5`} />
-                      </button>
-                    </div>
-                    <p className="text-[9px] text-blue-200">
-                      {autoSync ? 'Dữ liệu tự động lưu lên cloud' : 'Chỉ lưu khi nhấn nút'}
-                    </p>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <button 
-                      onClick={saveToFirestore}
-                      disabled={isSyncing}
-                      className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex flex-col items-center gap-2 border border-white/10 disabled:opacity-50"
-                    >
-                      {isSyncing ? (
-                        <RefreshCw size={18} className="animate-spin" />
-                      ) : (
-                        <Cloud size={18} />
-                      )}
-                      <span className="text-[10px] font-black uppercase">
-                        {isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}
-                      </span>
-                    </button>
-                    
-                    <button 
-                      onClick={() => user && loadFromFirestore(user.uid)}
-                      className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex flex-col items-center gap-2 border border-white/10"
-                    >
-                      <RefreshCw size={18} />
-                      <span className="text-[10px] font-black uppercase">Tải từ cloud</span>
-                    </button>
-                  </div>
-                  
-                  {lastSynced && (
-                    <div className="text-[9px] text-center text-blue-200 mt-2">
-                      Đồng bộ lần cuối: {new Date(lastSynced).toLocaleString('vi-VN')}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-sm mb-4">Đăng nhập để đồng bộ dữ liệu giữa các thiết bị</p>
-                  <button 
-                    onClick={handleGoogleLogin}
-                    disabled={isLoading}
-                    className="bg-white text-blue-600 px-6 py-3 rounded-xl font-black text-sm uppercase hover:bg-blue-50 transition-all flex items-center gap-3 mx-auto"
-                  >
-                    <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
-                    {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập với Google'}
-                  </button>
-                  <p className="text-[9px] text-blue-200 mt-4">
-                    ✓ Dữ liệu an toàn trên Google Cloud<br />
-                    ✓ Đồng bộ tự động giữa máy tính & điện thoại<br />
-                    ✓ Miễn phí đến 1GB storage
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8 flex flex-col gap-4">
-               <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
-                  <div className="bg-indigo-600 p-3 rounded-2xl text-white"><User size={24} /></div>
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Họ và tên người chấm công</label>
-                    <input type="text" value={settings.userName} onChange={(e) => setSettings({...settings, userName: e.target.value})} placeholder="Nhập tên của bạn..." className="w-full bg-transparent text-xl font-black text-slate-900 outline-none placeholder:text-slate-300" />
-                  </div>
-               </div>
-               <div className="grid grid-cols-2 gap-4">
-                  <button onClick={handleExport} className="flex flex-col items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-all active:scale-95">
-                    <Download size={24} />
-                    <span className="font-black text-[9px] uppercase">Xuất JSON</span>
-                  </button>
-                  <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all active:scale-95">
-                    <Upload size={24} />
-                    <span className="font-black text-[9px] uppercase">Nhập JSON</span>
-                    <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
-                  </button>
-               </div>
-            </div>
-
-            <div className="mb-8 p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="bg-white/20 p-3 rounded-2xl"><Chrome size={24} /></div>
-                  <div>
-                    <h3 className="font-black text-sm uppercase">Tiện ích Chrome</h3>
-                    <p className="text-[10px] text-indigo-100 italic">Nhấn để tải từng file</p>
-                  </div>
-                </div>
-                <button onClick={simulateExtensionPing} className="p-3 bg-white/20 rounded-xl hover:bg-white/30 transition-all flex items-center gap-2 text-[10px] font-black uppercase">
-                   <Signal size={16} /> Thử kết nối
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-3 mb-4 text-[10px] font-black uppercase">
-                <button 
-                  onClick={() => downloadExtensionFile('manifest.json', JSON.stringify({
-                    "manifest_version": 3,
-                    "name": "WorkTrack Auto-Clock",
-                    "version": "1.0",
-                    "description": "Tự động gửi tín hiệu chấm công khi mở trình duyệt",
-                    "permissions": ["storage", "alarms"],
-                    "background": { "service_worker": "background.js" }
-                  }, null, 2))}
-                  className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
-                >
-                  <FileJson size={18}/> manifest.json
-                </button>
-                <button 
-                  onClick={() => downloadExtensionFile('background.js', `// Kênh kết nối ảo đến App\nconst channel = new BroadcastChannel('worktrack_extension_channel');\n\nchrome.runtime.onInstalled.addListener(() => {\n  console.log("WorkTrack Extension Active");\n  pingApp();\n});\n\nfunction pingApp() {\n  channel.postMessage({ type: 'CLOCK_IN_PING' });\n}\n\n// Kiểm tra mỗi 60p\nchrome.alarms.create('checkPing', { periodInMinutes: 60 });\nchrome.alarms.onAlarm.addListener(() => pingApp());`)}
-                  className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
-                >
-                  <FileCode size={18}/> background.js
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-8">
-               <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Mã ca làm</label>
-                <input type="text" value={settings.shiftCode} onChange={(e) => setSettings({...settings, shiftCode: e.target.value.toUpperCase()})} className="w-full bg-transparent text-2xl font-black text-indigo-600 outline-none" />
-              </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Mục tiêu công</label>
-                <input type="number" value={settings.targetWorkingDays} onChange={(e) => setSettings({...settings, targetWorkingDays: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-rose-500 outline-none" />
-              </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Phép năm</label>
-                <input type="number" value={settings.initialAnnualLeave} onChange={(e) => setSettings({...settings, initialAnnualLeave: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-emerald-500 outline-none" />
-              </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Thâm niên</label>
-                <input type="number" value={settings.seniorityDays} onChange={(e) => setSettings({...settings, seniorityDays: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-emerald-500 outline-none" />
-              </div>
-            </div>
-
-            <button onClick={() => setIsSettingsOpen(false)} className="w-full bg-slate-900 text-white font-black py-6 rounded-3xl text-sm uppercase shadow-2xl transition-all active:scale-95">Lưu & Đóng</button>
-          </div>
-        </div>
-      )}
-
-      {selectedDay && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={() => setSelectedDay(null)}>
-          <div className="bg-white w-full max-w-xl rounded-t-[3rem] md:rounded-[3rem] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-black text-slate-900 uppercase mb-6 text-center tracking-tight">Cài đặt ngày {selectedDay}</h3>
-            <div className="grid grid-cols-3 gap-2 mb-6 overflow-y-auto max-h-[40vh] p-1">
-                {[
-                  DayType.WORK, DayType.HALF_WORK, 
-                  DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE, 
-                  DayType.PUBLIC_HOLIDAY, DayType.DAY_OFF, DayType.SH
-                ].map(type => (
-                    <button key={type} onClick={() => updateDay(selectedDay, type)} 
-                        className={`py-4 rounded-2xl border-2 font-black text-[10px] uppercase transition-all ${attendance[selectedDay]?.type === type ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
-                        {getDayLabel(type)}
-                    </button>
-                ))}
-            </div>
-            <textarea value={tempNote} onChange={(e) => setTempNote(e.target.value)} placeholder="Nhập ghi chú (sẽ hiển thị trên lịch)..." className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold outline-none mb-6 h-24 resize-none focus:ring-2 ring-indigo-500/20" />
-            <button onClick={() => updateDay(selectedDay, attendance[selectedDay]?.type || DayType.WORK)} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl text-sm uppercase shadow-xl transition-all active:scale-95">Lưu thay đổi</button>
-          </div>
-        </div>
-      )}
+      {/* Footer */}
+      <div className="mt-8 pb-6 text-center text-gray-500 text-sm">
+        <p>Bảng chấm công cá nhân • Phiên bản 2.0.1</p>
+        <p className="mt-1">© 2026 - Tự động đồng bộ với hệ thống</p>
+      </div>
     </div>
   );
-};
+}
 
 export default App;
