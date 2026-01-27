@@ -457,8 +457,8 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {showToast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold text-xs md:text-sm animate-in fade-in slide-in-from-top-4">
-          <CheckCircle2 className="text-emerald-400" size={18} /> {toastMsg}
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold text-xs md:text-sm animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 className="text-emerald-400" size={16} /> {toastMsg}
         </div>
       )}
 
@@ -471,16 +471,16 @@ const App: React.FC = () => {
                 Chấm công {currentDate.getFullYear()}
                 {user && <span className="text-emerald-500 ml-2">☁️ Đã kết</span>}
               </h1>
-              <p className="font-black text-sm md:text-xl uppercase text-slate-900 tracking-tighter truncate max-w-[150px] md:max-w-md">
-                <span className="text-indigo-600">
+              <p className="font-black text-sm md:text-xl uppercase text-slate-800 tracking-tighter truncate max-w-[150px] md:max-w-md">
+                <span className="text-indigo-500">
                   {user?.displayName || user?.email || settings.userName || 'Người dùng'}
                 </span>
-                {user && <span className="text-[10px] text-emerald-600 ml-2">✓</span>}
+                {user && <span className="text-[10px] text-emerald-400 ml-2">✓</span>}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={handleOptimize} className="group flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-amber-600 transition-all active:scale-95">
+            <button onClick={handleOptimize} className="group flex items-center gap-2 px-4 py-2.5 bg-amber-400 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-amber-500 transition-all active:scale-95">
               <Zap size={16} fill="white" className="group-hover:animate-bounce" /> Tối ưu
             </button>
             
@@ -489,12 +489,12 @@ const App: React.FC = () => {
               <button 
                 onClick={saveToFirestore}
                 disabled={isSyncing}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${isSyncing ? 'bg-slate-400' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${isSyncing ? 'bg-slate-400' : 'bg-emerald-400 hover:bg-emerald-500'}`}
               >
                 {isSyncing ? (
-                  <RefreshCw size={16} className="animate-spin" />
+                  <RefreshCw size={14} className="animate-spin" />
                 ) : (
-                  <Cloud size={16} />
+                  <Cloud size={14} />
                 )}
                 {isSyncing ? 'Đang đồng bộ...' : 'Lưu cloud'}
               </button>
@@ -504,18 +504,18 @@ const App: React.FC = () => {
             <button 
               onClick={user ? handleLogout : handleGoogleLogin}
               disabled={isLoading}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${user ? 'bg-rose-500 hover:bg-rose-600' : 'bg-blue-500 hover:bg-blue-600'} ${isLoading ? 'opacity-50' : ''}`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${user ? 'bg-rose-400 hover:bg-rose-500' : 'bg-blue-400 hover:bg-blue-500'} ${isLoading ? 'opacity-50' : ''}`}
             >
               {isLoading ? (
-                <RefreshCw size={16} className="animate-spin" />
+                <RefreshCw size={14} className="animate-spin" />
               ) : user ? (
                 <>
-                  <LogOut size={16} />
+                  <LogOut size={14} />
                   Thoát
                 </>
               ) : (
                 <>
-                  <LogIn size={16} />
+                  <LogIn size={14} />
                   Đăng nhập
                 </>
               )}
