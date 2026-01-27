@@ -455,32 +455,40 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 safe-top safe-bottom ios-tap-highlight">
       {showToast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold text-xs md:text-sm animate-in fade-in slide-in-from-top-4">
-          <CheckCircle2 className="text-emerald-400" size={16} /> {toastMsg}
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-slate-800 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 font-bold text-xs md:text-sm animate-in fade-in slide-in-from-top-4 max-w-[90%]">
+          <CheckCircle2 className="text-emerald-400 flex-shrink-0" size={14} /> 
+          <span className="truncate">{toastMsg}</span>
         </div>
       )}
 
-      <header className="bg-white/95 ios-blur sticky top-0 z-40 px-4 md:px-10 border-b border-slate-200">
+      <header className="bg-white/95 ios-blur sticky top-0 z-40 px-3 md:px-10 border-b border-slate-200 safe-top">
         <div className="max-w-7xl mx-auto h-16 md:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg"><Calendar size={20} /></div>
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="bg-indigo-600 p-2 md:p-2.5 rounded-lg md:rounded-xl text-white shadow-lg">
+              <Calendar size={18} className="md:size-20" />
+            </div>
             <div className="flex flex-col">
               <h1 className="font-black text-[10px] md:text-xs uppercase text-slate-400 tracking-wider -mb-1">
                 Chấm công {currentDate.getFullYear()}
-                {user && <span className="text-emerald-500 ml-2">☁️ Đã kết</span>}
+                {user && <span className="text-emerald-500 ml-1 md:ml-2">☁️</span>}
               </h1>
-              <p className="font-black text-sm md:text-xl uppercase text-slate-800 tracking-tighter truncate max-w-[150px] md:max-w-md">
+              <p className="font-black text-xs md:text-xl uppercase text-slate-800 tracking-tighter truncate max-w-[140px] md:max-w-md">
                 <span className="text-indigo-500">
                   {user?.displayName || user?.email || settings.userName || 'Người dùng'}
                 </span>
-                {user && <span className="text-[10px] text-emerald-400 ml-2">✓</span>}
+                {user && <span className="text-[9px] md:text-[10px] text-emerald-400 ml-1">✓</span>}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={handleOptimize} className="group flex items-center gap-2 px-4 py-2.5 bg-amber-400 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-amber-500 transition-all active:scale-95">
+          
+          {/* Desktop: Hiển thị đầy đủ các nút */}
+          <div className="hidden md:flex items-center gap-2">
+            <button 
+              onClick={handleOptimize} 
+              className="group flex items-center gap-2 px-4 py-2.5 bg-amber-400 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-amber-500 transition-all active:scale-95"
+            >
               <Zap size={16} fill="white" className="group-hover:animate-bounce" /> Tối ưu
             </button>
             
@@ -521,33 +529,51 @@ const App: React.FC = () => {
               )}
             </button>
             
-            <button onClick={() => setIsSettingsOpen(true)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
+            <button 
+              onClick={() => setIsSettingsOpen(true)} 
+              className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+            >
               <Settings size={22} />
             </button>
           </div>
+
+          {/* Mobile: Hamburger menu cho các nút chức năng */}
+          <div className="md:hidden relative">
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2.5 bg-slate-100 text-slate-600 rounded-xl"
+            >
+              <Settings size={18} />
+            </button>
+          </div>
         </div>
-        <div className="max-w-7xl mx-auto flex justify-between gap-1 pb-4 pt-1 overflow-x-auto no-scrollbar">
+        
+        <div className="max-w-7xl mx-auto flex justify-between gap-1 pb-4 pt-1 overflow-x-auto no-scrollbar px-3 md:px-0">
           {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
-            <button key={m} onClick={() => { const d = new Date(currentDate); d.setMonth(m-1); setCurrentDate(d); }}
-              className={`min-w-[45px] md:min-w-[65px] flex-1 py-2.5 rounded-lg text-xs md:text-sm font-black border transition-all ${currentDate.getMonth() === m-1 ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}
-            >{m}</button>
+            <button 
+              key={m} 
+              onClick={() => { const d = new Date(currentDate); d.setMonth(m-1); setCurrentDate(d); }}
+              className={`min-w-[40px] md:min-w-[65px] flex-1 py-2.5 rounded-lg text-xs md:text-sm font-black border transition-all ${currentDate.getMonth() === m-1 ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}
+            >
+              {m}
+            </button>
           ))}
         </div>
       </header>
 
-      <main className="flex-grow max-w-7xl mx-auto w-full px-4 md:px-10 py-6 pb-24">
+      <main className="flex-grow max-w-7xl mx-auto w-full px-3 md:px-10 py-6 pb-24 safe-bottom">
         <DashboardStats 
           totalLeave={stats.totalLeave} usedLeave={stats.usedLeave} monthlyWorkDays={0}
           totalCalculatedDays={stats.totalCalculatedDays} targetDays={settings.targetWorkingDays} completedWorkDays={stats.completedWorkDays}
         />
 
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden mb-8">
-          <div className="p-4 grid grid-cols-7 border-b border-slate-100 bg-slate-50/50 font-black text-[10px] text-slate-400 uppercase text-center">
+        <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden mb-8">
+          <div className="p-3 md:p-4 grid grid-cols-7 border-b border-slate-100 bg-slate-50/50 font-black text-[10px] md:text-[10px] text-slate-400 uppercase text-center">
             {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(d => <div key={d} className={d === 'CN' ? 'text-rose-500' : ''}>{d}</div>)}
           </div>
           <div className="p-2 md:p-4 grid grid-cols-7 gap-1 md:gap-3">
             {calendarGrid.map((date, idx) => {
-              if (!date) return <div key={`empty-${idx}`} className="min-h-[85px] md:min-h-[140px] opacity-0" />;
+              if (!date) return <div key={`empty-${idx}`} className="min-h-[75px] md:min-h-[140px] opacity-0" />;
               const id = formatId(date);
               const record = attendance[id];
               const isToday = id === formatId(new Date());
@@ -557,7 +583,7 @@ const App: React.FC = () => {
               
               return (
                 <button key={id} onClick={() => { setSelectedDay(id); setTempNote(record?.note || ''); }}
-                  className={`min-h-[85px] md:min-h-[140px] p-2 md:p-4 rounded-xl md:rounded-3xl border flex flex-col relative text-left transition-all ${
+                  className={`min-h-[75px] md:min-h-[140px] p-1.5 md:p-4 rounded-xl md:rounded-3xl border flex flex-col relative text-left transition-all ${
                     [DayType.WORK, DayType.HALF_WORK].includes(record?.type) ? 'bg-white border-slate-100' : 
                     record?.type === DayType.DAY_OFF ? 'bg-rose-50 border-rose-100' : 
                     [DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE].includes(record?.type) ? 'bg-emerald-50 border-emerald-100' : 
@@ -568,7 +594,7 @@ const App: React.FC = () => {
                     <span className={`text-sm md:text-xl font-black ${isSunday || holiday ? 'text-rose-500' : 'text-slate-800'}`}>{date.getDate()}</span>
                     {record?.isAutoClocked && isToday && (
                       <div className="bg-indigo-600 text-white p-1 rounded-md shadow-md animate-bounce">
-                        <Cpu size={14} />
+                        <Cpu size={12} className="md:size-14" />
                       </div>
                     )}
                   </div>
@@ -599,89 +625,148 @@ const App: React.FC = () => {
         </div>
       </main>
 
+      {/* Mobile Bottom Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2 px-4 z-50 shadow-lg safe-bottom">
+        <div className="grid grid-cols-4 gap-2">
+          <button 
+            onClick={handleOptimize}
+            className="flex flex-col items-center justify-center p-2 bg-amber-400 text-white rounded-lg active:scale-95"
+          >
+            <Zap size={18} />
+            <span className="text-[9px] font-bold mt-1">Tối ưu</span>
+          </button>
+          
+          {user ? (
+            <>
+              <button 
+                onClick={saveToFirestore}
+                disabled={isSyncing}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg active:scale-95 ${isSyncing ? 'bg-slate-400' : 'bg-emerald-400'}`}
+              >
+                {isSyncing ? (
+                  <RefreshCw size={18} className="animate-spin" />
+                ) : (
+                  <Cloud size={18} />
+                )}
+                <span className="text-[9px] font-bold mt-1">{isSyncing ? 'Đồng bộ...' : 'Lưu'}</span>
+              </button>
+              
+              <button 
+                onClick={handleLogout}
+                className="flex flex-col items-center justify-center p-2 bg-rose-400 text-white rounded-lg active:scale-95"
+              >
+                <LogOut size={18} />
+                <span className="text-[9px] font-bold mt-1">Thoát</span>
+              </button>
+            </>
+          ) : (
+            <button 
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+              className={`flex flex-col items-center justify-center p-2 rounded-lg active:scale-95 col-span-2 ${isLoading ? 'bg-slate-400' : 'bg-blue-400'}`}
+            >
+              {isLoading ? (
+                <RefreshCw size={18} className="animate-spin" />
+              ) : (
+                <LogIn size={18} />
+              )}
+              <span className="text-[9px] font-bold mt-1">{isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}</span>
+            </button>
+          )}
+          
+          <button 
+            onClick={() => setIsSettingsOpen(true)}
+            className="flex flex-col items-center justify-center p-2 bg-slate-100 text-slate-600 rounded-lg active:scale-95"
+          >
+            <Settings size={18} />
+            <span className="text-[9px] font-bold mt-1">Cài đặt</span>
+          </button>
+        </div>
+      </div>
+
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsSettingsOpen(false)}>
-          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setIsSettingsOpen(false)} className="absolute top-8 right-8 p-3 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"><X size={24} /></button>
-            <h2 className="text-2xl font-black uppercase text-slate-900 mb-8 flex items-center gap-3"><Settings size={28} className="text-indigo-600" /> Cài đặt & Dữ liệu</h2>
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl p-6 md:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setIsSettingsOpen(false)} className="absolute top-6 right-6 p-3 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"><X size={20} className="md:size-24" /></button>
+            <h2 className="text-xl md:text-2xl font-black uppercase text-slate-900 mb-6 md:mb-8 flex items-center gap-3"><Settings size={24} className="text-indigo-600" /> Cài đặt & Dữ liệu</h2>
             
             {/* Cloud Sync Section */}
-            <div className="mb-8 p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-[2rem] text-white shadow-xl">
+            <div className="mb-6 md:mb-8 p-4 md:p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-[1.5rem] md:rounded-[2rem] text-white shadow-xl">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="bg-white/20 p-3 rounded-2xl"><Cloud size={24} /></div>
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="bg-white/20 p-2 md:p-3 rounded-xl md:rounded-2xl"><Cloud size={20} className="md:size-24" /></div>
                   <div>
-                    <h3 className="font-black text-sm uppercase">Đồng bộ đám mây</h3>
-                    <p className="text-[10px] text-blue-100 italic">
+                    <h3 className="font-black text-xs md:text-sm uppercase">Đồng bộ đám mây</h3>
+                    <p className="text-[9px] md:text-[10px] text-blue-100 italic truncate max-w-[180px] md:max-w-none">
                       {user ? `Đang đăng nhập với: ${user.email}` : 'Chưa đăng nhập'}
                     </p>
                   </div>
                 </div>
                 <div className={`p-2 rounded-lg ${user ? 'bg-emerald-500' : 'bg-rose-500'}`}>
-                  {user ? <Cloud size={20} /> : <CloudOff size={20} />}
+                  {user ? <Cloud size={16} className="md:size-20" /> : <CloudOff size={16} className="md:size-20" />}
                 </div>
               </div>
               
               {user ? (
                 <div className="space-y-4">
-                  <div className="bg-white/10 p-4 rounded-xl">
+                  <div className="bg-white/10 p-3 md:p-4 rounded-xl">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-black uppercase">Tự động đồng bộ</span>
+                      <span className="text-[10px] md:text-[10px] font-black uppercase">Tự động đồng bộ</span>
                       <button 
                         onClick={() => setAutoSync(!autoSync)}
-                        className={`w-12 h-6 rounded-full transition-all ${autoSync ? 'bg-emerald-500' : 'bg-slate-400'}`}
+                        className={`w-10 md:w-12 h-5 md:h-6 rounded-full transition-all ${autoSync ? 'bg-emerald-500' : 'bg-slate-400'}`}
                       >
-                        <div className={`w-5 h-5 rounded-full bg-white transform transition-transform ${autoSync ? 'translate-x-7' : 'translate-x-1'} mt-0.5`} />
+                        <div className={`w-4 md:w-5 h-4 md:h-5 rounded-full bg-white transform transition-transform ${autoSync ? 'translate-x-5 md:translate-x-7' : 'translate-x-1'} mt-0.5`} />
                       </button>
                     </div>
-                    <p className="text-[9px] text-blue-200">
+                    <p className="text-[8px] md:text-[9px] text-blue-200">
                       {autoSync ? 'Dữ liệu tự động lưu lên cloud' : 'Chỉ lưu khi nhấn nút'}
                     </p>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2 md:gap-3">
                     <button 
                       onClick={saveToFirestore}
                       disabled={isSyncing}
-                      className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex flex-col items-center gap-2 border border-white/10 disabled:opacity-50"
+                      className="bg-white/10 p-3 md:p-4 rounded-xl hover:bg-white/20 transition-all flex flex-col items-center gap-2 border border-white/10 disabled:opacity-50"
                     >
                       {isSyncing ? (
-                        <RefreshCw size={18} className="animate-spin" />
+                        <RefreshCw size={16} className="animate-spin md:size-18" />
                       ) : (
-                        <Cloud size={18} />
+                        <Cloud size={16} className="md:size-18" />
                       )}
-                      <span className="text-[10px] font-black uppercase">
+                      <span className="text-[9px] md:text-[10px] font-black uppercase">
                         {isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}
                       </span>
                     </button>
                     
                     <button 
                       onClick={() => user && loadFromFirestore(user.uid)}
-                      className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex flex-col items-center gap-2 border border-white/10"
+                      className="bg-white/10 p-3 md:p-4 rounded-xl hover:bg-white/20 transition-all flex flex-col items-center gap-2 border border-white/10"
                     >
-                      <RefreshCw size={18} />
-                      <span className="text-[10px] font-black uppercase">Tải từ cloud</span>
+                      <RefreshCw size={16} className="md:size-18" />
+                      <span className="text-[9px] md:text-[10px] font-black uppercase">Tải từ cloud</span>
                     </button>
                   </div>
                   
                   {lastSynced && (
-                    <div className="text-[9px] text-center text-blue-200 mt-2">
+                    <div className="text-[8px] md:text-[9px] text-center text-blue-200 mt-2">
                       Đồng bộ lần cuối: {new Date(lastSynced).toLocaleString('vi-VN')}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="text-center py-4">
-                  <p className="text-sm mb-4">Đăng nhập để đồng bộ dữ liệu giữa các thiết bị</p>
+                <div className="text-center py-3 md:py-4">
+                  <p className="text-sm mb-3 md:mb-4">Đăng nhập để đồng bộ dữ liệu giữa các thiết bị</p>
                   <button 
                     onClick={handleGoogleLogin}
                     disabled={isLoading}
-                    className="bg-white text-blue-600 px-6 py-3 rounded-xl font-black text-sm uppercase hover:bg-blue-50 transition-all flex items-center gap-3 mx-auto"
+                    className="bg-white text-blue-600 px-5 md:px-6 py-2.5 md:py-3 rounded-xl font-black text-xs md:text-sm uppercase hover:bg-blue-50 transition-all flex items-center gap-2 md:gap-3 mx-auto"
                   >
-                    <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+                    <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4 md:w-5 md:h-5" />
                     {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập với Google'}
                   </button>
-                  <p className="text-[9px] text-blue-200 mt-4">
+                  <p className="text-[8px] md:text-[9px] text-blue-200 mt-3 md:mt-4">
                     ✓ Dữ liệu an toàn trên Google Cloud<br />
                     ✓ Đồng bộ tự động giữa máy tính & điện thoại<br />
                     ✓ Miễn phí đến 1GB storage
@@ -690,41 +775,41 @@ const App: React.FC = () => {
               )}
             </div>
 
-            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8 flex flex-col gap-4">
-               <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
-                  <div className="bg-indigo-600 p-3 rounded-2xl text-white"><User size={24} /></div>
+            <div className="bg-slate-50 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-slate-100 mb-6 md:mb-8 flex flex-col gap-4">
+               <div className="flex items-center gap-3 md:gap-4 border-b border-slate-200 pb-3 md:pb-4">
+                  <div className="bg-indigo-600 p-2 md:p-3 rounded-xl md:rounded-2xl text-white"><User size={20} className="md:size-24" /></div>
                   <div className="flex-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Họ và tên người chấm công</label>
-                    <input type="text" value={settings.userName} onChange={(e) => setSettings({...settings, userName: e.target.value})} placeholder="Nhập tên của bạn..." className="w-full bg-transparent text-xl font-black text-slate-900 outline-none placeholder:text-slate-300" />
+                    <label className="text-[10px] md:text-[10px] font-black text-slate-400 uppercase block mb-1">Họ và tên người chấm công</label>
+                    <input type="text" value={settings.userName} onChange={(e) => setSettings({...settings, userName: e.target.value})} placeholder="Nhập tên của bạn..." className="w-full bg-transparent text-lg md:text-xl font-black text-slate-900 outline-none placeholder:text-slate-300" />
                   </div>
                </div>
-               <div className="grid grid-cols-2 gap-4">
-                  <button onClick={handleExport} className="flex flex-col items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-all active:scale-95">
-                    <Download size={24} />
-                    <span className="font-black text-[9px] uppercase">Xuất JSON</span>
+               <div className="grid grid-cols-2 gap-3 md:gap-4">
+                  <button onClick={handleExport} className="flex flex-col items-center gap-2 md:gap-3 p-3 md:p-4 bg-white rounded-xl md:rounded-2xl border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-all active:scale-95">
+                    <Download size={20} className="md:size-24" />
+                    <span className="font-black text-[9px] md:text-[9px] uppercase">Xuất JSON</span>
                   </button>
-                  <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all active:scale-95">
-                    <Upload size={24} />
-                    <span className="font-black text-[9px] uppercase">Nhập JSON</span>
+                  <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-2 md:gap-3 p-3 md:p-4 bg-white rounded-xl md:rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all active:scale-95">
+                    <Upload size={20} className="md:size-24" />
+                    <span className="font-black text-[9px] md:text-[9px] uppercase">Nhập JSON</span>
                     <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
                   </button>
                </div>
             </div>
 
-            <div className="mb-8 p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl">
+            <div className="mb-6 md:mb-8 p-4 md:p-6 bg-indigo-600 rounded-[1.5rem] md:rounded-[2rem] text-white shadow-xl">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="bg-white/20 p-3 rounded-2xl"><Chrome size={24} /></div>
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="bg-white/20 p-2 md:p-3 rounded-xl md:rounded-2xl"><Chrome size={20} className="md:size-24" /></div>
                   <div>
-                    <h3 className="font-black text-sm uppercase">Tiện ích Chrome</h3>
-                    <p className="text-[10px] text-indigo-100 italic">Nhấn để tải từng file</p>
+                    <h3 className="font-black text-xs md:text-sm uppercase">Tiện ích Chrome</h3>
+                    <p className="text-[9px] md:text-[10px] text-indigo-100 italic">Nhấn để tải từng file</p>
                   </div>
                 </div>
-                <button onClick={simulateExtensionPing} className="p-3 bg-white/20 rounded-xl hover:bg-white/30 transition-all flex items-center gap-2 text-[10px] font-black uppercase">
-                   <Signal size={16} /> Thử kết nối
+                <button onClick={simulateExtensionPing} className="p-2 md:p-3 bg-white/20 rounded-lg md:rounded-xl hover:bg-white/30 transition-all flex items-center gap-2 text-[9px] md:text-[10px] font-black uppercase">
+                   <Signal size={14} className="md:size-16" /> Thử kết nối
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-4 text-[10px] font-black uppercase">
+              <div className="grid grid-cols-2 gap-2 md:gap-3 mb-4 text-[9px] md:text-[10px] font-black uppercase">
                 <button 
                   onClick={() => downloadExtensionFile('manifest.json', JSON.stringify({
                     "manifest_version": 3,
@@ -734,61 +819,61 @@ const App: React.FC = () => {
                     "permissions": ["storage", "alarms"],
                     "background": { "service_worker": "background.js" }
                   }, null, 2))}
-                  className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
+                  className="bg-white/10 p-3 md:p-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
                 >
-                  <FileJson size={18}/> manifest.json
+                  <FileJson size={16} className="md:size-18"/> manifest.json
                 </button>
                 <button 
                   onClick={() => downloadExtensionFile('background.js', `// Kênh kết nối ảo đến App\nconst channel = new BroadcastChannel('worktrack_extension_channel');\n\nchrome.runtime.onInstalled.addListener(() => {\n  console.log("WorkTrack Extension Active");\n  pingApp();\n});\n\nfunction pingApp() {\n  channel.postMessage({ type: 'CLOCK_IN_PING' });\n}\n\n// Kiểm tra mỗi 60p\nchrome.alarms.create('checkPing', { periodInMinutes: 60 });\nchrome.alarms.onAlarm.addListener(() => pingApp());`)}
-                  className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
+                  className="bg-white/10 p-3 md:p-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
                 >
-                  <FileCode size={18}/> background.js
+                  <FileCode size={16} className="md:size-18"/> background.js
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-8">
-               <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Mã ca làm</label>
-                <input type="text" value={settings.shiftCode} onChange={(e) => setSettings({...settings, shiftCode: e.target.value.toUpperCase()})} className="w-full bg-transparent text-2xl font-black text-indigo-600 outline-none" />
+            <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
+               <div className="bg-slate-50 p-3 md:p-5 rounded-2xl md:rounded-3xl border border-slate-100">
+                <label className="text-[10px] md:text-[10px] font-black text-slate-400 uppercase block mb-1">Mã ca làm</label>
+                <input type="text" value={settings.shiftCode} onChange={(e) => setSettings({...settings, shiftCode: e.target.value.toUpperCase()})} className="w-full bg-transparent text-xl md:text-2xl font-black text-indigo-600 outline-none" />
               </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Mục tiêu công</label>
-                <input type="number" value={settings.targetWorkingDays} onChange={(e) => setSettings({...settings, targetWorkingDays: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-rose-500 outline-none" />
+              <div className="bg-slate-50 p-3 md:p-5 rounded-2xl md:rounded-3xl border border-slate-100">
+                <label className="text-[10px] md:text-[10px] font-black text-slate-400 uppercase block mb-1">Mục tiêu công</label>
+                <input type="number" value={settings.targetWorkingDays} onChange={(e) => setSettings({...settings, targetWorkingDays: Number(e.target.value)})} className="w-full bg-transparent text-xl md:text-2xl font-black text-rose-500 outline-none" />
               </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Phép năm</label>
-                <input type="number" value={settings.initialAnnualLeave} onChange={(e) => setSettings({...settings, initialAnnualLeave: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-emerald-500 outline-none" />
+              <div className="bg-slate-50 p-3 md:p-5 rounded-2xl md:rounded-3xl border border-slate-100">
+                <label className="text-[10px] md:text-[10px] font-black text-slate-400 uppercase block mb-1">Phép năm</label>
+                <input type="number" value={settings.initialAnnualLeave} onChange={(e) => setSettings({...settings, initialAnnualLeave: Number(e.target.value)})} className="w-full bg-transparent text-xl md:text-2xl font-black text-emerald-500 outline-none" />
               </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Thâm niên</label>
-                <input type="number" value={settings.seniorityDays} onChange={(e) => setSettings({...settings, seniorityDays: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-emerald-500 outline-none" />
+              <div className="bg-slate-50 p-3 md:p-5 rounded-2xl md:rounded-3xl border border-slate-100">
+                <label className="text-[10px] md:text-[10px] font-black text-slate-400 uppercase block mb-1">Thâm niên</label>
+                <input type="number" value={settings.seniorityDays} onChange={(e) => setSettings({...settings, seniorityDays: Number(e.target.value)})} className="w-full bg-transparent text-xl md:text-2xl font-black text-emerald-500 outline-none" />
               </div>
             </div>
 
-            <button onClick={() => setIsSettingsOpen(false)} className="w-full bg-slate-900 text-white font-black py-6 rounded-3xl text-sm uppercase shadow-2xl transition-all active:scale-95">Lưu & Đóng</button>
+            <button onClick={() => setIsSettingsOpen(false)} className="w-full bg-slate-900 text-white font-black py-4 md:py-6 rounded-2xl md:rounded-3xl text-sm uppercase shadow-2xl transition-all active:scale-95">Lưu & Đóng</button>
           </div>
         </div>
       )}
 
       {selectedDay && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={() => setSelectedDay(null)}>
-          <div className="bg-white w-full max-w-xl rounded-t-[3rem] md:rounded-[3rem] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-black text-slate-900 uppercase mb-6 text-center tracking-tight">Cài đặt ngày {selectedDay}</h3>
-            <div className="grid grid-cols-3 gap-2 mb-6 overflow-y-auto max-h-[40vh] p-1">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 safe-bottom" onClick={() => setSelectedDay(null)}>
+          <div className="bg-white w-full max-w-xl rounded-t-[2rem] md:rounded-[3rem] p-6 md:p-8 pb-12 md:pb-12 shadow-2xl animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base md:text-lg font-black text-slate-900 uppercase mb-4 md:mb-6 text-center tracking-tight">Cài đặt ngày {selectedDay}</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4 md:mb-6 overflow-y-auto max-h-[40vh] p-1">
                 {[
                   DayType.WORK, DayType.HALF_WORK, 
                   DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE, 
                   DayType.PUBLIC_HOLIDAY, DayType.DAY_OFF, DayType.SH
                 ].map(type => (
                     <button key={type} onClick={() => updateDay(selectedDay, type)} 
-                        className={`py-4 rounded-2xl border-2 font-black text-[10px] uppercase transition-all ${attendance[selectedDay]?.type === type ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
+                        className={`py-3 md:py-4 rounded-xl md:rounded-2xl border-2 font-black text-[9px] md:text-[10px] uppercase transition-all ${attendance[selectedDay]?.type === type ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
                         {getDayLabel(type)}
                     </button>
                 ))}
             </div>
-            <textarea value={tempNote} onChange={(e) => setTempNote(e.target.value)} placeholder="Nhập ghi chú (sẽ hiển thị trên lịch)..." className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold outline-none mb-6 h-24 resize-none focus:ring-2 ring-indigo-500/20" />
-            <button onClick={() => updateDay(selectedDay, attendance[selectedDay]?.type || DayType.WORK)} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl text-sm uppercase shadow-xl transition-all active:scale-95">Lưu thay đổi</button>
+            <textarea value={tempNote} onChange={(e) => setTempNote(e.target.value)} placeholder="Nhập ghi chú (sẽ hiển thị trên lịch)..." className="w-full bg-slate-50 border border-slate-100 rounded-xl md:rounded-2xl p-3 md:p-4 text-sm font-bold outline-none mb-4 md:mb-6 h-20 md:h-24 resize-none focus:ring-2 ring-indigo-500/20" />
+            <button onClick={() => updateDay(selectedDay, attendance[selectedDay]?.type || DayType.WORK)} className="w-full bg-slate-900 text-white font-black py-3 md:py-5 rounded-xl md:rounded-2xl text-sm uppercase shadow-xl transition-all active:scale-95">Lưu thay đổi</button>
           </div>
         </div>
       )}
