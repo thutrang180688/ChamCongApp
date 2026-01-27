@@ -219,7 +219,7 @@ const App: React.FC = () => {
         settings,
         lastSynced: syncTime,
         email: user.email,
-        displayName: user.displayName || settings.userName,
+        displayName: settings.userName, // Sử dụng tên từ cài đặt thay vì displayName từ Google
         updatedAt: syncTime
       }, { merge: true });
       
@@ -476,7 +476,7 @@ const App: React.FC = () => {
               </h1>
               <p className="font-black text-xs md:text-xl uppercase text-slate-800 tracking-tighter truncate max-w-[140px] md:max-w-md">
                 <span className="text-indigo-500">
-                  {user?.displayName || user?.email || settings.userName || 'Người dùng'}
+                  {settings.userName || 'Người dùng'}
                 </span>
                 {user && <span className="text-[9px] md:text-[10px] text-emerald-400 ml-1">✓</span>}
               </p>
