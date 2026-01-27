@@ -1,0 +1,11 @@
+
+{
+  "manifest_version": 3,
+  "name": "WorkTrack Auto-Clock",
+  "version": "1.0",
+  "description": "Tự động gửi tín hiệu chấm công khi mở trình duyệt",
+  "permissions": ["storage", "alarms"],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

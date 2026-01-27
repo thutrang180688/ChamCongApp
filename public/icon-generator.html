@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tạo Icon</title>
+    <style>
+        canvas {
+            border: 1px solid #ccc;
+            margin: 10px;
+        }
+        .container {
+            padding: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Tạo Icon cho App Chấm Công</h2>
+        
+        <canvas id="icon512" width="512" height="512"></canvas>
+        <canvas id="icon192" width="192" height="192"></canvas>
+        <canvas id="icon32" width="32" height="32"></canvas>
+        
+        <div>
+            <button onclick="downloadIcons()">Tải xuống tất cả icons</button>
+            <button onclick="generateIcon()">Tạo lại icon</button>
+        </div>
+        
+        <p>Chữ hiển thị: <input type="text" id="textInput" value="CC" maxlength="2"></p>
+        <p>Màu nền: <input type="color" id="colorPicker" value="#4f46e5"></p>
+    </div>
+
+    <script>
+        function generateIcon() {
+            const text = document.getElementById('textInput').value || 'CC';
+            const color = document.getElementById('colorPicker').value;
+            
+            // Tạo icon 512x512
+            const canvas512 = document.getElementById('icon512');
+            const ctx512 = canvas512.getContext('2d');
+            createIcon(ctx512, 512, text, color);
+            
+            // Tạo icon 192x192
+            const canvas192 = document.getElementById('icon192');
+            const ctx192 = canvas192.getContext('2d');
+            createIcon(ctx192, 192, text, color);
+            
+            // Tạo icon 32x32
+            const canvas32 = document.getElementById('icon32');
+            const ctx32 = canvas32.getContext('2d');
+            createIcon(ctx32, 32, text, color);
+        }
+        
+        function createIcon(ctx, size, text, color) {
+            // Vẽ nền
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Tạo hiệu ứng gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(1, lightenColor(color, 30));
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Vẽ viền bo tròn
+            ctx.beginPath();
+            ctx.roundRect(size * 0.1, size * 0.1, size * 0.8, size * 0.8, size * 0.2);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = size * 0.03;
+            ctx.stroke();
+            
+            // Vẽ chữ
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${size * 0.4}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, size / 2);
+            
+            // Thêm hiệu ứng bóng
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = size * 0.05;
+            ctx.shadowOffsetX = size * 0.02;
+            ctx.shadowOffsetY = size * 0.02;
+        }
+        
+        function lightenColor(color, percent) {
+            const num = parseInt(color.replace("#", ""), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = (num >> 16) + amt;
+            const G = (num >> 8 & 0x00FF) + amt;
+            const B = (num & 0x0000FF) + amt;
+            return "#" + (
+                0x1000000 +
+                (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+                (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+                (B < 255 ? B < 1 ? 0 : B : 255)
+            ).toString(16).slice(1);
+        }
+        
+        function downloadCanvas(canvas, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        function downloadIcons() {
+            downloadCanvas(document.getElementById('icon512'), 'icon-512.png');
+            setTimeout(() => {
+                downloadCanvas(document.getElementById('icon192'), 'icon-192.png');
+            }, 100);
+            setTimeout(() => {
+                downloadCanvas(document.getElementById('icon32'), 'favicon.png');
+            }, 200);
+        }
+        
+        // Tạo icon khi tải trang
+        window.onload = generateIcon;
+        
+        // Cập nhật khi thay đổi
+        document.getElementById('textInput').addEventListener('input', generateIcon);
+        document.getElementById('colorPicker').addEventListener('input', generateIcon);
+    </script>
+</body>
+</html>
