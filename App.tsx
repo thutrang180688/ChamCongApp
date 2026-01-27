@@ -468,8 +468,8 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg"><Calendar size={20} /></div>
             <div className="flex flex-col">
               <h1 className="font-black text-[10px] md:text-xs uppercase text-slate-400 tracking-wider -mb-1">
-                Bảng chấm công {currentDate.getFullYear()}
-                {user && <span className="text-emerald-500 ml-2">☁️ Đã kết nối cloud</span>}
+                Chấm công {currentDate.getFullYear()}
+                {user && <span className="text-emerald-500 ml-2">☁️ Đã kết</span>}
               </h1>
               <p className="font-black text-sm md:text-xl uppercase text-slate-900 tracking-tighter truncate max-w-[150px] md:max-w-md">
                 <span className="text-indigo-600">
@@ -481,7 +481,7 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handleOptimize} className="group flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-amber-600 transition-all active:scale-95">
-              <Zap size={16} fill="white" className="group-hover:animate-bounce" /> Tối ưu công
+              <Zap size={16} fill="white" className="group-hover:animate-bounce" /> Tối ưu
             </button>
             
             {/* Sync Button */}
@@ -496,7 +496,7 @@ const App: React.FC = () => {
                 ) : (
                   <Cloud size={16} />
                 )}
-                {isSyncing ? 'Đang đồng bộ...' : 'Lưu lên cloud'}
+                {isSyncing ? 'Đang đồng bộ...' : 'Lưu cloud'}
               </button>
             )}
             
@@ -511,7 +511,7 @@ const App: React.FC = () => {
               ) : user ? (
                 <>
                   <LogOut size={16} />
-                  Đăng xuất
+                  Thoát
                 </>
               ) : (
                 <>
