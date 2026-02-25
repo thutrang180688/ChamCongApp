@@ -72,8 +72,17 @@ async function ensureSheetsInitialized(sheets: any, spreadsheetId: string) {
 // --- Auth Routes ---
 app.get('/api/auth/url', (req, res) => {
   try {
-    const oauth2Client = getOauth2Client();
-    const url = oauth2Client.generateAuthUrl({
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const appUrl = process.env.APP_URL;
+
+    if (!clientId || !clientSecret || !appUrl) {
+      console.error('Missing environment variables:', { clientId: !!clientId, clientSecret: !!clientSecret, appUrl: !!appUrl });
+      return res.status(500).json({ error: 'Cấu hình Server thiếu biến môi trường (Client ID, Secret hoặc App URL)' });
+    }
+
+    const client = getOauth2Client();
+    const url = client.generateAuthUrl({
       access_type: 'offline',
       scope: [
         'https://www.googleapis.com/auth/userinfo.profile',
@@ -83,9 +92,9 @@ app.get('/api/auth/url', (req, res) => {
       prompt: 'consent'
     });
     res.json({ url });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth URL error:', error);
-    res.status(500).json({ error: 'Failed to generate auth URL' });
+    res.status(500).json({ error: 'Lỗi tạo URL đăng nhập: ' + error.message });
   }
 });
 
