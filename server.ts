@@ -21,11 +21,17 @@ app.use(cookieSession({
   sameSite: 'none'
 }));
 
-const getOauth2Client = () => new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback`
-);
+const getOauth2Client = () => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const appUrl = process.env.APP_URL;
+
+  if (!clientId || !clientSecret || !appUrl) {
+    throw new Error('Missing environment variables for Google OAuth');
+  }
+
+  return new google.auth.OAuth2(clientId, clientSecret, `${appUrl}/auth/callback`);
+};
 
 const SUPER_ADMIN_EMAIL = 'thutrang180688@gmail.com';
 
@@ -72,15 +78,6 @@ async function ensureSheetsInitialized(sheets: any, spreadsheetId: string) {
 // --- Auth Routes ---
 app.get('/api/auth/url', (req, res) => {
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const appUrl = process.env.APP_URL;
-
-    if (!clientId || !clientSecret || !appUrl) {
-      console.error('Missing environment variables:', { clientId: !!clientId, clientSecret: !!clientSecret, appUrl: !!appUrl });
-      return res.status(500).json({ error: 'Cấu hình Server thiếu biến môi trường (Client ID, Secret hoặc App URL)' });
-    }
-
     const client = getOauth2Client();
     const url = client.generateAuthUrl({
       access_type: 'offline',
