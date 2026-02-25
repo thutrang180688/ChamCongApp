@@ -1,6 +1,5 @@
 
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import { google } from "googleapis";
 import cookieSession from "cookie-session";
 import path from "path";
@@ -350,12 +349,15 @@ app.get('/api/admin/users', async (req, res) => {
 // --- Vite Integration ---
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    // Chỉ import vite khi ở môi trường phát triển (local)
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
+    // Ở môi trường production (Vercel), chỉ phục vụ file tĩnh
     app.use(express.static(path.join(__dirname, 'dist')));
     app.get('*', (req, res) => {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
