@@ -9,6 +9,12 @@ export enum DayType {
   SH = 'SH'
 }
 
+export interface User {
+  email: string;
+  name: string;
+  picture: string;
+}
+
 export interface AttendanceRecord {
   date: string; // ISO format
   type: DayType;

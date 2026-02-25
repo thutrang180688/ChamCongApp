@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -7,24 +8,12 @@
     <!-- PWA Config cho iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Chấm Công">
+    <meta name="apple-mobile-web-app-title" content="Bảng Chấm Công">
     
     <title>Bảng Chấm Công Cá Nhân</title>
-    
-    <!-- Favicon và App Icons -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json">
-    
-    <!-- Theme Color -->
-    <meta name="theme-color" content="#4f46e5">
-    <meta name="msapplication-TileColor" content="#4f46e5">
-    
+    <link rel="icon" type="image/png" href="/upload/icon.png">
+    <link rel="apple-touch-icon" href="/upload/icon.png">
+    <meta name="msapplication-TileImage" content="/upload/icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
@@ -58,18 +47,6 @@
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
         }
-        
-        /* Thêm CSS cho icon */
-        .app-icon {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 20%;
-            font-weight: 900;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
-        }
     </style>
 <script type="importmap">
 {
@@ -83,21 +60,9 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-    
-    <!-- Service Worker for PWA -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(err => {
-                    console.log('ServiceWorker registration failed: ', err);
-                });
-            });
-        }
-    </script>
 </body>
 </html>
