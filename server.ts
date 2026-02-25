@@ -21,7 +21,7 @@ app.use(cookieSession({
   sameSite: 'none'
 }));
 
-const oauth2Client = new google.auth.OAuth2(
+const getOauth2Client = () => new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback`
@@ -71,21 +71,28 @@ async function ensureSheetsInitialized(sheets: any, spreadsheetId: string) {
 
 // --- Auth Routes ---
 app.get('/api/auth/url', (req, res) => {
-  const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: [
-      'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/userinfo.email',
-      'https://www.googleapis.com/auth/spreadsheets'
-    ],
-    prompt: 'consent'
-  });
-  res.json({ url });
+  try {
+    const oauth2Client = getOauth2Client();
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: [
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/spreadsheets'
+      ],
+      prompt: 'consent'
+    });
+    res.json({ url });
+  } catch (error) {
+    console.error('Auth URL error:', error);
+    res.status(500).json({ error: 'Failed to generate auth URL' });
+  }
 });
 
 app.get('/auth/callback', async (req, res) => {
   const { code } = req.query;
   try {
+    const oauth2Client = getOauth2Client();
     const { tokens } = await oauth2Client.getToken(code as string);
     oauth2Client.setCredentials(tokens);
     
@@ -364,9 +371,13 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;
