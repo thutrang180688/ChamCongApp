@@ -11,19 +11,23 @@ app.use(cookieSession({
   keys: [process.env.SESSION_SECRET || 'worktrack-secret-123'],
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   secure: true,
-  sameSite: 'none'
+  sameSite: 'none',
+  proxy: true // Quan trọng cho Vercel
 }));
 
 const getOauth2Client = () => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const appUrl = process.env.APP_URL;
+  let appUrl = process.env.APP_URL;
 
   if (!clientId || !clientSecret || !appUrl) {
     throw new Error('Missing environment variables for Google OAuth');
   }
 
-  return new google.auth.OAuth2(clientId, clientSecret, `${appUrl}/auth/callback`);
+  // Tự động xóa dấu gạch chéo ở cuối nếu có để tránh lỗi redirect_uri_mismatch
+  const cleanAppUrl = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl;
+
+  return new google.auth.OAuth2(clientId, clientSecret, `${cleanAppUrl}/auth/callback`);
 };
 
 const SUPER_ADMIN_EMAIL = 'thutrang180688@gmail.com';

@@ -54,16 +54,39 @@ const App: React.FC = () => {
   const SETTINGS_KEY = 'worktrack_pro_settings_v1';
 
   // Check Auth
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.user) {
-          setUser(data.user);
-          fetchData();
+  const checkAuth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      if (data.user) {
+        setUser(data.user);
+        // Sau khi có user, gọi fetchData
+        setIsSyncing(true);
+        const dataRes = await fetch('/api/data');
+        if (dataRes.ok) {
+          const dbData = await dataRes.json();
+          if (dbData.attendance) setAttendance(dbData.attendance);
+          if (dbData.settings) setSettings(dbData.settings);
         }
-      });
+        setIsSyncing(false);
+      }
+    } catch (error) {
+      console.error("Auth check error:", error);
+    }
   }, []);
+
+  useEffect(() => {
+    checkAuth();
+    
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        // Thay vì reload, ta gọi checkAuth để cập nhật state mượt mà
+        checkAuth();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [checkAuth]);
 
   const handleLogin = async () => {
     try {
