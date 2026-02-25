@@ -89,28 +89,29 @@ const App: React.FC = () => {
   }, [checkAuth]);
 
   const handleLogin = async () => {
+    // Mẹo cho iOS: Mở cửa sổ popup ngay lập tức khi click để tránh bị chặn
+    const authWindow = window.open('about:blank', 'google_auth', 'width=600,height=700');
+    
+    if (!authWindow) {
+      alert("Trình duyệt đã chặn cửa sổ Popup. Vui lòng cho phép popup để đăng nhập!");
+      return;
+    }
+
     try {
       const res = await fetch('/api/auth/url');
       if (!res.ok) {
+        authWindow.close();
         const errorText = await res.text();
         throw new Error(`Server error: ${res.status} - ${errorText}`);
       }
       const { url } = await res.json();
-      if (!url) throw new Error("Không nhận được URL đăng nhập từ Server");
-
-      const authWindow = window.open(url, 'google_auth', 'width=600,height=700');
-      
-      if (!authWindow) {
-        alert("Trình duyệt đã chặn cửa sổ Popup. Vui lòng cho phép popup để đăng nhập!");
-        return;
+      if (!url) {
+        authWindow.close();
+        throw new Error("Không nhận được URL đăng nhập từ Server");
       }
-      
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-          window.location.reload();
-        }
-      };
-      window.addEventListener('message', handleMessage);
+
+      // Cập nhật URL cho popup đã mở
+      authWindow.location.href = url;
     } catch (error: any) {
       console.error("Login error:", error);
       alert("Lỗi đăng nhập: " + error.message);
@@ -457,40 +458,40 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <header className="bg-white/95 ios-blur sticky top-0 z-40 px-4 md:px-10 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto h-16 md:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg"><Calendar size={20} /></div>
+      <header className="bg-white/95 ios-blur sticky top-0 z-40 px-4 md:px-10 border-b border-slate-200 pt-[var(--sat)]">
+        <div className="max-w-7xl mx-auto h-14 md:h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="bg-indigo-600 p-2 md:p-2.5 rounded-xl text-white shadow-lg"><Calendar size={18} className="md:w-5 md:h-5" /></div>
             <div className="flex flex-col">
-              <h1 className="font-black text-[10px] md:text-xs uppercase text-slate-400 tracking-wider -mb-1">Bảng chấm công {currentDate.getFullYear()}</h1>
-              <p className="font-black text-sm md:text-xl uppercase text-slate-900 tracking-tighter truncate max-w-[150px] md:max-w-md">
+              <h1 className="font-black text-[8px] md:text-xs uppercase text-slate-400 tracking-wider -mb-1">Bảng chấm công {currentDate.getFullYear()}</h1>
+              <p className="font-black text-xs md:text-xl uppercase text-slate-900 tracking-tighter truncate max-w-[100px] md:max-w-md">
                 <span className="text-indigo-600">{settings.userName || 'Người dùng'}</span>
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 md:gap-2">
             {user ? (
-              <div className="flex items-center gap-2">
-                <img src={user.picture} alt={user.name} className="w-8 h-8 rounded-full border border-slate-200" />
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <img src={user.picture} alt={user.name} className="w-7 h-7 md:w-8 md:h-8 rounded-full border border-slate-200" />
                 {user.email === SUPER_ADMIN_EMAIL && (
-                  <button onClick={() => setIsAdminView(!isAdminView)} className={`p-2.5 rounded-xl transition-all ${isAdminView ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                    <ShieldCheck size={20} />
+                  <button onClick={() => setIsAdminView(!isAdminView)} className={`p-2 md:p-2.5 rounded-xl transition-all ${isAdminView ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    <ShieldCheck size={18} className="md:w-5 md:h-5" />
                   </button>
                 )}
-                <button onClick={handleLogout} className="p-2.5 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-colors">
-                  <LogOut size={20} />
+                <button onClick={handleLogout} className="p-2 md:p-2.5 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-colors">
+                  <LogOut size={18} className="md:w-5 md:h-5" />
                 </button>
               </div>
             ) : (
-              <button onClick={handleLogin} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm hover:bg-slate-50 transition-all active:scale-95">
-                <LogIn size={16} className="text-indigo-600" /> Đăng nhập
+              <button onClick={handleLogin} className="flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-[10px] md:text-xs shadow-sm hover:bg-slate-50 transition-all active:scale-95">
+                <LogIn size={14} className="text-indigo-600 md:w-4 md:h-4" /> Đăng nhập
               </button>
             )}
-            <button onClick={handleOptimize} className="group flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-amber-600 transition-all active:scale-95">
-              <Zap size={16} fill="white" className="group-hover:animate-bounce" /> Tối ưu công
+            <button onClick={handleOptimize} className="group flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2.5 bg-amber-500 text-white rounded-xl font-black text-[9px] md:text-[10px] uppercase shadow-lg hover:bg-amber-600 transition-all active:scale-95">
+              <Zap size={14} fill="white" className="group-hover:animate-bounce md:w-4 md:h-4" /> Tối ưu
             </button>
-            <button onClick={() => setIsSettingsOpen(true)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
-              <Settings size={22} />
+            <button onClick={() => setIsSettingsOpen(true)} className="p-2 md:p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
+              <Settings size={18} className="md:w-5 md:h-5" />
             </button>
           </div>
         </div>
