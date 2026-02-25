@@ -66,16 +66,32 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = async () => {
-    const res = await fetch('/api/auth/url');
-    const { url } = await res.json();
-    const authWindow = window.open(url, 'google_auth', 'width=600,height=700');
-    
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        window.location.reload();
+    try {
+      const res = await fetch('/api/auth/url');
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Server error: ${res.status} - ${errorText}`);
       }
-    };
-    window.addEventListener('message', handleMessage);
+      const { url } = await res.json();
+      if (!url) throw new Error("Không nhận được URL đăng nhập từ Server");
+
+      const authWindow = window.open(url, 'google_auth', 'width=600,height=700');
+      
+      if (!authWindow) {
+        alert("Trình duyệt đã chặn cửa sổ Popup. Vui lòng cho phép popup để đăng nhập!");
+        return;
+      }
+      
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+          window.location.reload();
+        }
+      };
+      window.addEventListener('message', handleMessage);
+    } catch (error: any) {
+      console.error("Login error:", error);
+      alert("Lỗi đăng nhập: " + error.message);
+    }
   };
 
   const handleLogout = async () => {
