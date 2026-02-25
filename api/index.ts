@@ -4,15 +4,17 @@ import cookieSession from "cookie-session";
 
 const app = express();
 
+// Quan trọng cho Vercel để nhận diện HTTPS và lưu Cookie
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(express.json());
 app.use(cookieSession({
   name: 'session',
   keys: [process.env.SESSION_SECRET || 'worktrack-secret-123'],
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-  secure: true,
-  sameSite: 'none',
-  proxy: true // Quan trọng cho Vercel
+  secure: true, // Bắt buộc phải là true trên Vercel (HTTPS)
+  sameSite: 'lax', // Chế độ ổn định nhất
 }));
 
 const getOauth2Client = () => {

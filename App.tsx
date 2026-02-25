@@ -80,8 +80,8 @@ const App: React.FC = () => {
     
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        // Thay vì reload, ta gọi checkAuth để cập nhật state mượt mà
-        checkAuth();
+        // Dùng reload để ép trình duyệt nhận Cookie mới trên Vercel
+        window.location.reload();
       }
     };
     window.addEventListener('message', handleMessage);
