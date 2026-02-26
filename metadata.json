@@ -1,5 +1,5 @@
 {
-  "name": "Chấm Công Pro",
-  "description": "Hệ thống chấm công cá nhân đồng bộ Google Sheets, hỗ trợ đăng nhập Google và quản lý phép năm linh hoạt.",
+  "name": "Chấm CôngV9",
+  "description": "An advanced work schedule tracking system with automated attendance logic simulating Chrome extension integration, leave management, and seniority calculations.",
   "requestFramePermissions": []
 }

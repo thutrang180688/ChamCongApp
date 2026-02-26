@@ -9,12 +9,6 @@ export enum DayType {
   SH = 'SH'
 }
 
-export interface User {
-  email: string;
-  name: string;
-  picture: string;
-}
-
 export interface AttendanceRecord {
   date: string; // ISO format
   type: DayType;
@@ -27,7 +21,6 @@ export interface AttendanceRecord {
 export interface UserSettings {
   userName: string;
   initialAnnualLeave: number;
-  seniorityDays: number;
   shiftCode: string;
   targetWorkingDays: number;
   autoSuggest: boolean;

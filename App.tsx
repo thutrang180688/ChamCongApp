@@ -1,41 +1,64 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { DayType, AttendanceRecord, UserSettings, User as UserType } from './types';
+import { DayType, AttendanceRecord, UserSettings } from './types';
 import { getDaysInMonth, formatId, VIETNAMESE_HOLIDAYS } from './utils/dateUtils';
 import DashboardStats from './components/DashboardStats';
 import { 
   Calendar,
   Settings,
   X,
-  Download,
-  Upload,
   CheckCircle2,
-  Cpu,
-  Chrome,
   Zap,
-  FileJson,
-  FileCode,
-  Signal,
   StickyNote,
   User,
-  LogOut,
+  Cloud,
+  CloudOff,
   LogIn,
-  ShieldCheck,
-  RefreshCw
+  LogOut,
+  RefreshCw,
+  Lock
 } from 'lucide-react';
 
-const SUPER_ADMIN_EMAIL = 'thutrang180688@gmail.com';
+import { initializeApp } from "firebase/app";
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  onAuthStateChanged, 
+  signOut,
+  User as FirebaseUser 
+} from "firebase/auth";
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  getDoc 
+} from "firebase/firestore";
+
+// Firebase configuration (User should replace with their own)
+const firebaseConfig = {
+  apiKey: "AIzaSyAspKG80Ld1T4yg2tQfh0gIIVY0L1pV_qE",
+  authDomain: "chamcongonline-7df7f.firebaseapp.com",
+  projectId: "chamcongonline-7df7f",
+  storageBucket: "chamcongonline-7df7f.firebasestorage.app",
+  messagingSenderId: "80878628372",
+  appId: "1:80878628372:web:480137f9899e7997aa8101"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<UserType | null>(null);
-  const [isAdminView, setIsAdminView] = useState(false);
-  const [adminUsers, setAdminUsers] = useState<any[]>([]);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const [settings, setSettings] = useState<UserSettings>({
     userName: 'Người dùng',
     initialAnnualLeave: 12,
-    seniorityDays: 0,
     shiftCode: 'X1',
     targetWorkingDays: 24,
     autoSuggest: true,
@@ -53,153 +76,7 @@ const App: React.FC = () => {
   const STORAGE_KEY = 'worktrack_pro_local_v1';
   const SETTINGS_KEY = 'worktrack_pro_settings_v1';
 
-  // Check Auth
-  const checkAuth = useCallback(async () => {
-    try {
-      const res = await fetch('/api/auth/me');
-      const data = await res.json();
-      if (data.user) {
-        setUser(data.user);
-        // Sau khi có user, gọi fetchData
-        setIsSyncing(true);
-        const dataRes = await fetch('/api/data');
-        if (dataRes.ok) {
-          const dbData = await dataRes.json();
-          if (dbData.attendance) setAttendance(dbData.attendance);
-          if (dbData.settings) setSettings(dbData.settings);
-        }
-        setIsSyncing(false);
-      }
-    } catch (error) {
-      console.error("Auth check error:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkAuth();
-    
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        // Dùng reload để ép trình duyệt nhận Cookie mới trên Vercel
-        window.location.reload();
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [checkAuth]);
-
-  const handleLogin = async () => {
-    // Mẹo cho iOS: Mở cửa sổ popup ngay lập tức khi click để tránh bị chặn
-    const authWindow = window.open('about:blank', 'google_auth', 'width=600,height=700');
-    
-    if (!authWindow) {
-      alert("Trình duyệt đã chặn cửa sổ Popup. Vui lòng cho phép popup để đăng nhập!");
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/auth/url');
-      if (!res.ok) {
-        authWindow.close();
-        const errorText = await res.text();
-        throw new Error(`Server error: ${res.status} - ${errorText}`);
-      }
-      const { url } = await res.json();
-      if (!url) {
-        authWindow.close();
-        throw new Error("Không nhận được URL đăng nhập từ Server");
-      }
-
-      // Cập nhật URL cho popup đã mở
-      authWindow.location.href = url;
-    } catch (error: any) {
-      console.error("Login error:", error);
-      alert("Lỗi đăng nhập: " + error.message);
-    }
-  };
-
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    setUser(null);
-    window.location.reload();
-  };
-
-  const fetchData = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch('/api/data');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.attendance && Object.keys(data.attendance).length > 0) setAttendance(data.attendance);
-        if (data.settings) setSettings(data.settings);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const saveData = async (newAttendance?: any, newSettings?: any) => {
-    if (!user) return;
-    setIsSyncing(true);
-    try {
-      await fetch('/api/data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          attendance: newAttendance || attendance, 
-          settings: newSettings || settings 
-        })
-      });
-      triggerToast("Đã đồng bộ với Google Sheets!");
-    } catch (e) {
-      triggerToast("Lỗi đồng bộ dữ liệu!");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const fetchAdminUsers = async () => {
-    try {
-      const res = await fetch('/api/admin/users');
-      if (res.ok) {
-        const data = await res.json();
-        setAdminUsers(data.users);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    if (user?.email === SUPER_ADMIN_EMAIL && isAdminView) {
-      fetchAdminUsers();
-    }
-  }, [user, isAdminView]);
-
-  // Thiết lập kênh lắng nghe từ Extension
-  useEffect(() => {
-    const channel = new BroadcastChannel('worktrack_extension_channel');
-    channel.onmessage = (event) => {
-      if (event.data.type === 'CLOCK_IN_PING') {
-        const todayStr = formatId(new Date());
-        setAttendance(prev => ({
-          ...prev,
-          [todayStr]: {
-            ...prev[todayStr],
-            type: DayType.WORK,
-            isAutoClocked: true,
-            isManual: false,
-            note: (prev[todayStr]?.note || '') + ' [Extension Auto-Clock]'
-          }
-        }));
-        triggerToast("🚀 Đã nhận tín hiệu chấm công từ Chrome Extension!");
-      }
-    };
-    return () => channel.close();
-  }, []);
-
+  // Remove BroadcastChannel useEffect
   const generateInitialData = useCallback((year: number) => {
     const seed: Record<string, AttendanceRecord> = {};
     for (let m = 0; m < 12; m++) {
@@ -225,24 +102,6 @@ const App: React.FC = () => {
     return seed;
   }, []);
 
-  const downloadExtensionFile = (fileName: string, content: string) => {
-    try {
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      triggerToast(`Đã tải xuống ${fileName}`);
-    } catch (e) {
-      console.error(e);
-      triggerToast("Lỗi khi tải file!");
-    }
-  };
-
   const handleOptimize = () => {
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth();
@@ -251,7 +110,7 @@ const App: React.FC = () => {
     const target = settings.targetWorkingDays || 24;
     const todayStr = formatId(new Date());
 
-    const totalAllowedAL = Number(settings.initialAnnualLeave || 0) + Number(settings.seniorityDays || 0);
+    const totalAllowedAL = Number(settings.initialAnnualLeave || 0);
     const alUsedOtherMonths = Object.keys(attendance).reduce((acc, id) => {
       const d = new Date(id);
       if (d.getFullYear() === currentYear && d.getMonth() !== currentMonth) {
@@ -270,7 +129,6 @@ const App: React.FC = () => {
       const dayOfWeek = d.getDay();
       const holidayName = VIETNAMESE_HOLIDAYS[id];
 
-      // Reset trạng thái tự động cũ để không bị lặp icon
       newAttendance[id] = { ...newAttendance[id], isAutoClocked: false };
 
       if (holidayName) {
@@ -319,36 +177,72 @@ const App: React.FC = () => {
     triggerToast(`Đã tối ưu: T2-T6 làm việc, bù Thứ 7 cho đủ ${target} công.`);
   };
 
-  const handleExport = () => {
-    const data = JSON.stringify({ attendance, settings }, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ChamCong_${settings.userName.replace(/\s+/g, '_')}_${formatId(new Date())}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    triggerToast("Đã xuất file dữ liệu JSON!");
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      setUser(result.user);
+      setIsAuthModalOpen(false);
+      triggerToast(`Chào mừng, ${result.user.displayName}!`);
+      fetchCloudData(result.user.uid);
+    } catch (err: any) {
+      triggerToast("Đăng nhập thất bại: " + err.message);
+    }
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const parsed = JSON.parse(event.target?.result as string);
-        if (parsed.attendance) setAttendance(parsed.attendance);
-        if (parsed.settings) setSettings(parsed.settings);
-        triggerToast("Nhập dữ liệu thành công!");
-      } catch (err) {
-        triggerToast("Lỗi: File không hợp lệ!");
-      }
-    };
-    reader.readAsText(file);
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      triggerToast("Đã đăng xuất.");
+    } catch (err: any) {
+      triggerToast("Đăng xuất thất bại.");
+    }
   };
+
+  const fetchCloudData = async (uid: string) => {
+    setIsSyncing(true);
+    try {
+      const docRef = doc(db, "users", uid);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.attendance) setAttendance(data.attendance);
+        if (data.settings) setSettings(data.settings);
+        triggerToast("Đã đồng bộ dữ liệu từ đám mây.");
+      }
+    } catch (err) {
+      console.error("Sync failed:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const syncToCloud = async () => {
+    if (!user) return;
+    setIsSyncing(true);
+    try {
+      await setDoc(doc(db, "users", user.uid), {
+        attendance,
+        settings,
+        lastSynced: new Date().toISOString()
+      }, { merge: true });
+      triggerToast("Đã lưu dữ liệu lên đám mây.");
+    } catch (err) {
+      triggerToast("Đồng bộ thất bại.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        fetchCloudData(currentUser.uid);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const storedSettings = localStorage.getItem(SETTINGS_KEY);
@@ -415,7 +309,7 @@ const App: React.FC = () => {
     }, 0);
 
     return { 
-      totalLeave: Number(settings.initialAnnualLeave || 0) + Number(settings.seniorityDays || 0), 
+      totalLeave: Number(settings.initialAnnualLeave || 0), 
       usedLeave, totalCalculatedDays, completedWorkDays 
     };
   }, [attendance, currentDate, settings]);
@@ -427,19 +321,11 @@ const App: React.FC = () => {
   };
 
   const updateDay = (dateStr: string, type: DayType) => {
-    const newAttendance = { 
-      ...attendance, 
-      [dateStr]: { ...attendance[dateStr], type, isManual: true, isAutoClocked: false, note: tempNote } 
-    };
-    setAttendance(newAttendance);
+    setAttendance(prev => ({ 
+      ...prev, 
+      [dateStr]: { ...prev[dateStr], type, isManual: true, isAutoClocked: false, note: tempNote } 
+    }));
     setSelectedDay(null);
-    if (user) saveData(newAttendance);
-  };
-
-  const simulateExtensionPing = () => {
-    const channel = new BroadcastChannel('worktrack_extension_channel');
-    channel.postMessage({ type: 'CLOCK_IN_PING' });
-    channel.close();
   };
 
   const getDayLabel = (type: DayType) => {
@@ -451,251 +337,191 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="h-[100dvh] flex flex-col bg-slate-50 overflow-hidden">
       {showToast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold text-xs md:text-sm animate-in fade-in slide-in-from-top-4">
-          <CheckCircle2 className="text-emerald-400" size={18} /> {toastMsg}
+        <div className="fixed top-[calc(env(safe-area-inset-top)+1rem)] left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 font-bold text-[10px] md:text-xs animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 className="text-emerald-400" size={14} /> {toastMsg}
         </div>
       )}
 
-      <header className="bg-white/95 ios-blur sticky top-0 z-40 px-4 md:px-10 border-b border-slate-200 pt-[var(--sat)]">
-        <div className="max-w-7xl mx-auto h-14 md:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="bg-indigo-600 p-2 md:p-2.5 rounded-xl text-white shadow-lg"><Calendar size={18} className="md:w-5 md:h-5" /></div>
+      <header className="bg-white/95 ios-blur sticky top-0 z-40 px-4 md:px-6 border-b border-slate-200 pt-[env(safe-area-inset-top)]">
+        <div className="max-w-7xl mx-auto h-12 md:h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-indigo-600 p-1.5 rounded-lg text-white shadow-md"><Calendar size={16} /></div>
             <div className="flex flex-col">
-              <h1 className="font-black text-[8px] md:text-xs uppercase text-slate-400 tracking-wider -mb-1">Bảng chấm công {currentDate.getFullYear()}</h1>
-              <p className="font-black text-xs md:text-xl uppercase text-slate-900 tracking-tighter truncate max-w-[100px] md:max-w-md">
+              <h1 className="font-black text-[8px] uppercase text-slate-400 tracking-wider -mb-0.5">Chấm công {currentDate.getFullYear()}</h1>
+              <p className="font-black text-xs md:text-base uppercase text-slate-900 tracking-tighter truncate max-w-[120px] md:max-w-md">
                 <span className="text-indigo-600">{settings.userName || 'Người dùng'}</span>
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 md:gap-2">
-            {user ? (
-              <div className="flex items-center gap-1.5 md:gap-2">
-                <img src={user.picture} alt={user.name} className="w-7 h-7 md:w-8 md:h-8 rounded-full border border-slate-200" />
-                {user.email === SUPER_ADMIN_EMAIL && (
-                  <button onClick={() => setIsAdminView(!isAdminView)} className={`p-2 md:p-2.5 rounded-xl transition-all ${isAdminView ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                    <ShieldCheck size={18} className="md:w-5 md:h-5" />
-                  </button>
-                )}
-                <button onClick={handleLogout} className="p-2 md:p-2.5 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-colors">
-                  <LogOut size={18} className="md:w-5 md:h-5" />
-                </button>
-              </div>
-            ) : (
-              <button onClick={handleLogin} className="flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-[10px] md:text-xs shadow-sm hover:bg-slate-50 transition-all active:scale-95">
-                <LogIn size={14} className="text-indigo-600 md:w-4 md:h-4" /> Đăng nhập
-              </button>
-            )}
-            <button onClick={handleOptimize} className="group flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2.5 bg-amber-500 text-white rounded-xl font-black text-[9px] md:text-[10px] uppercase shadow-lg hover:bg-amber-600 transition-all active:scale-95">
-              <Zap size={14} fill="white" className="group-hover:animate-bounce md:w-4 md:h-4" /> Tối ưu
+          <div className="flex items-center gap-2">
+            <button onClick={handleOptimize} className="group flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg font-black text-[8px] uppercase shadow-md hover:bg-amber-600 transition-all active:scale-95">
+              <Zap size={12} fill="white" className="group-hover:animate-bounce" /> Tối ưu
             </button>
-            <button onClick={() => setIsSettingsOpen(true)} className="p-2 md:p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
-              <Settings size={18} className="md:w-5 md:h-5" />
+            <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+              <Settings size={18} />
             </button>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto flex justify-between gap-1 pb-4 pt-1 overflow-x-auto no-scrollbar">
+        <div className="max-w-7xl mx-auto flex justify-between gap-1 pb-2 pt-1 overflow-x-auto no-scrollbar">
           {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
             <button key={m} onClick={() => { const d = new Date(currentDate); d.setMonth(m-1); setCurrentDate(d); }}
-              className={`min-w-[45px] md:min-w-[65px] flex-1 py-2.5 rounded-lg text-xs md:text-sm font-black border transition-all ${currentDate.getMonth() === m-1 ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-400 border-slate-100'}`}
+              className={`min-w-[35px] md:min-w-[50px] flex-1 py-1.5 rounded-md text-[10px] md:text-xs font-black border transition-all ${currentDate.getMonth() === m-1 ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-400 border-slate-100'}`}
             >{m}</button>
           ))}
         </div>
       </header>
 
-      <main className="flex-grow max-w-7xl mx-auto w-full px-4 md:px-10 py-6 pb-24">
-        {isAdminView && user?.email === SUPER_ADMIN_EMAIL ? (
-          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl p-8 mb-8 animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-black uppercase text-slate-900 flex items-center gap-3"><ShieldCheck className="text-indigo-600" /> Quản trị người dùng</h2>
-              <button onClick={() => setIsAdminView(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase">
-                    <th className="pb-4">Email</th>
-                    <th className="pb-4">Tên</th>
-                    <th className="pb-4">Lần cuối đăng nhập</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {adminUsers.map((u, i) => (
-                    <tr key={i} className="border-b border-slate-50 last:border-0 text-sm">
-                      <td className="py-4 font-bold text-slate-600">{u.email}</td>
-                      <td className="py-4 font-black text-slate-900">{u.name}</td>
-                      <td className="py-4 text-slate-400 text-xs">{new Date(u.lastLogin).toLocaleString('vi-VN')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      <main className="flex-grow max-w-7xl mx-auto w-full px-4 md:px-6 py-2 pb-[env(safe-area-inset-bottom)] overflow-hidden flex flex-col">
+        <div className="mb-2">
+          <DashboardStats 
+            totalLeave={stats.totalLeave} usedLeave={stats.usedLeave} monthlyWorkDays={0}
+            totalCalculatedDays={stats.totalCalculatedDays} targetDays={settings.targetWorkingDays} completedWorkDays={stats.completedWorkDays}
+          />
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden flex-grow flex flex-col">
+          <div className="p-2 grid grid-cols-7 border-b border-slate-100 bg-slate-50/50 font-black text-[8px] text-slate-400 uppercase text-center">
+            {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(d => <div key={d} className={d === 'CN' ? 'text-rose-500' : ''}>{d}</div>)}
           </div>
-        ) : (
-          <>
-            <DashboardStats 
-              totalLeave={stats.totalLeave} usedLeave={stats.usedLeave} monthlyWorkDays={0}
-              totalCalculatedDays={stats.totalCalculatedDays} targetDays={settings.targetWorkingDays} completedWorkDays={stats.completedWorkDays}
-            />
-
-            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden mb-8">
-              <div className="p-4 grid grid-cols-7 border-b border-slate-100 bg-slate-50/50 font-black text-[10px] text-slate-400 uppercase text-center">
-                {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(d => <div key={d} className={d === 'CN' ? 'text-rose-500' : ''}>{d}</div>)}
-              </div>
-              <div className="p-2 md:p-4 grid grid-cols-7 gap-1 md:gap-3">
-                {calendarGrid.map((date, idx) => {
-                  if (!date) return <div key={`empty-${idx}`} className="min-h-[85px] md:min-h-[140px] opacity-0" />;
-                  const id = formatId(date);
-                  const record = attendance[id];
-                  const isToday = id === formatId(new Date());
-                  const holiday = VIETNAMESE_HOLIDAYS[id];
-                  const isSunday = date.getDay() === 0;
-                  const hasNote = record?.note && record.note !== holiday;
+          <div className="p-1 md:p-2 grid grid-cols-7 gap-0.5 md:gap-1 flex-grow">
+            {calendarGrid.map((date, idx) => {
+              if (!date) return <div key={`empty-${idx}`} className="h-full opacity-0" />;
+              const id = formatId(date);
+              const record = attendance[id];
+              const isToday = id === formatId(new Date());
+              const holiday = VIETNAMESE_HOLIDAYS[id];
+              const isSunday = date.getDay() === 0;
+              const hasNote = record?.note && record.note !== holiday;
+              
+              return (
+                <button key={id} onClick={() => { setSelectedDay(id); setTempNote(record?.note || ''); }}
+                  className={`h-full min-h-0 p-1 md:p-2 rounded-lg md:rounded-xl border flex flex-col relative text-left transition-all ${
+                    [DayType.WORK, DayType.HALF_WORK].includes(record?.type) ? 'bg-white border-slate-100' : 
+                    record?.type === DayType.DAY_OFF ? 'bg-rose-50 border-rose-100' : 
+                    [DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE].includes(record?.type) ? 'bg-emerald-50 border-emerald-100' : 
+                    record?.type === DayType.PUBLIC_HOLIDAY ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-transparent'
+                  } ${isToday ? 'ring-1 ring-indigo-500 shadow-md z-10' : ''}`}
+                >
+                  <div className="flex justify-between items-start">
+                    <span className={`text-[10px] md:text-sm font-black ${isSunday || holiday ? 'text-rose-500' : 'text-slate-800'}`}>{date.getDate()}</span>
+                  </div>
                   
-                  return (
-                    <button key={id} onClick={() => { setSelectedDay(id); setTempNote(record?.note || ''); }}
-                      className={`min-h-[85px] md:min-h-[140px] p-2 md:p-4 rounded-xl md:rounded-3xl border flex flex-col relative text-left transition-all ${
-                        [DayType.WORK, DayType.HALF_WORK].includes(record?.type) ? 'bg-white border-slate-100' : 
-                        record?.type === DayType.DAY_OFF ? 'bg-rose-50 border-rose-100' : 
-                        [DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE].includes(record?.type) ? 'bg-emerald-50 border-emerald-100' : 
-                        record?.type === DayType.PUBLIC_HOLIDAY ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-transparent'
-                      } ${isToday ? 'ring-2 ring-indigo-500 shadow-lg z-10' : ''}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <span className={`text-sm md:text-xl font-black ${isSunday || holiday ? 'text-rose-500' : 'text-slate-800'}`}>{date.getDate()}</span>
-                        {record?.isAutoClocked && isToday && (
-                          <div className="bg-indigo-600 text-white p-1 rounded-md shadow-md animate-bounce">
-                            <Cpu size={14} />
-                          </div>
-                        )}
+                  <div className="flex-grow mt-0.5 flex flex-col gap-0">
+                    {holiday && <span className="text-[6px] md:text-[8px] font-bold text-rose-600 truncate leading-tight">{holiday}</span>}
+                    {hasNote && (
+                      <div className="flex items-start gap-0.5 text-[6px] md:text-[8px] text-slate-500 font-medium italic leading-tight">
+                        <StickyNote size={6} className="mt-0.5 flex-shrink-0 text-amber-500" />
+                        <span className="line-clamp-1">{record.note}</span>
                       </div>
-                      
-                      <div className="flex-grow mt-1 flex flex-col gap-0.5">
-                        {holiday && <span className="text-[7px] md:text-[9px] font-bold text-rose-600 truncate">{holiday}</span>}
-                        {hasNote && (
-                          <div className="flex items-start gap-1 text-[7px] md:text-[10px] text-slate-500 font-medium italic leading-tight">
-                            <StickyNote size={8} className="mt-0.5 flex-shrink-0 text-amber-500" />
-                            <span className="line-clamp-2">{record.note}</span>
-                          </div>
-                        )}
-                      </div>
+                    )}
+                  </div>
 
-                      <div className="mt-auto pt-1">
-                        <span className={`text-[7px] md:text-xs font-black px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg uppercase w-fit inline-block ${
-                            [DayType.WORK, DayType.HALF_WORK].includes(record?.type) ? 'bg-indigo-100 text-indigo-700' : 
-                            [DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE].includes(record?.type) ? 'bg-emerald-100 text-emerald-700' : 
-                            record?.type === DayType.PUBLIC_HOLIDAY ? 'bg-rose-100 text-rose-700' :
-                            'bg-slate-200 text-slate-600'}`}>
-                          {getDayLabel(record?.type)}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </>
-        )}
+                  <div className="mt-auto pt-0.5">
+                    <span className={`text-[6px] md:text-[10px] font-black px-1 py-0 rounded-md uppercase w-fit inline-block ${
+                        [DayType.WORK, DayType.HALF_WORK].includes(record?.type) ? 'bg-indigo-100 text-indigo-700' : 
+                        [DayType.ANNUAL_LEAVE, DayType.HALF_ANNUAL_LEAVE].includes(record?.type) ? 'bg-emerald-100 text-emerald-700' : 
+                        record?.type === DayType.PUBLIC_HOLIDAY ? 'bg-rose-100 text-rose-700' :
+                        'bg-slate-200 text-slate-600'}`}>
+                      {getDayLabel(record?.type)}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </main>
 
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsSettingsOpen(false)}>
-          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setIsSettingsOpen(false)} className="absolute top-8 right-8 p-3 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"><X size={24} /></button>
-            <h2 className="text-2xl font-black uppercase text-slate-900 mb-8 flex items-center gap-3"><Settings size={28} className="text-indigo-600" /> Cài đặt & Dữ liệu</h2>
+          <div className="bg-white rounded-[2rem] w-full max-w-lg p-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] shadow-2xl relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setIsSettingsOpen(false)} className="absolute top-6 right-6 p-2 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"><X size={20} /></button>
+            <h2 className="text-xl font-black uppercase text-slate-900 mb-6 flex items-center gap-2"><Settings size={24} className="text-indigo-600" /> Cài đặt</h2>
             
-            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8 flex flex-col gap-4">
-               <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
-                  <div className="bg-indigo-600 p-3 rounded-2xl text-white"><User size={24} /></div>
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6 flex flex-col gap-4">
+               <div className="flex items-center gap-3 border-b border-slate-200 pb-3">
+                  <div className="bg-indigo-600 p-2 rounded-xl text-white"><User size={20} /></div>
                   <div className="flex-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Họ và tên người chấm công</label>
-                    <input type="text" value={settings.userName} onChange={(e) => setSettings({...settings, userName: e.target.value})} placeholder="Nhập tên của bạn..." className="w-full bg-transparent text-xl font-black text-slate-900 outline-none placeholder:text-slate-300" />
+                    <label className="text-[8px] font-black text-slate-400 uppercase block mb-0.5">Họ và tên</label>
+                    <input type="text" value={settings.userName} onChange={(e) => setSettings({...settings, userName: e.target.value})} placeholder="Nhập tên..." className="w-full bg-transparent text-lg font-black text-slate-900 outline-none placeholder:text-slate-300" />
                   </div>
                </div>
-               <div className="grid grid-cols-2 gap-4">
-                  <button onClick={handleExport} className="flex flex-col items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition-all active:scale-95">
-                    <Download size={24} />
-                    <span className="font-black text-[9px] uppercase">Xuất JSON</span>
-                  </button>
-                  <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all active:scale-95">
-                    <Upload size={24} />
-                    <span className="font-black text-[9px] uppercase">Nhập JSON</span>
-                    <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
-                  </button>
+                              <div className="flex flex-col gap-2">
+                  <label className="text-[8px] font-black text-slate-400 uppercase block">Đồng bộ đám mây</label>
+                  {!user ? (
+                    <button onClick={() => setIsAuthModalOpen(true)} className="flex items-center justify-center gap-2 w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-md active:scale-95">
+                      <LogIn size={16} /> Đăng nhập Google
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200">
+                        <div className="flex items-center gap-2">
+                          {user.photoURL ? (
+                            <img src={user.photoURL} className="w-6 h-6 rounded-full" alt="avatar" />
+                          ) : (
+                            <Cloud size={16} className="text-emerald-500" />
+                          )}
+                          <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">{user.displayName || user.email}</span>
+                        </div>
+                        <button onClick={handleLogout} className="text-rose-500 hover:text-rose-600 transition-colors">
+                          <LogOut size={16} />
+                        </button>
+                      </div>
+                      <button onClick={syncToCloud} disabled={isSyncing} className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase shadow-md active:scale-95 disabled:opacity-50">
+                        <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} /> {isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}
+                      </button>
+                    </div>
+                  )}
                </div>
             </div>
 
-            <div className="mb-8 p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="bg-white/20 p-3 rounded-2xl"><Chrome size={24} /></div>
-                  <div>
-                    <h3 className="font-black text-sm uppercase">Tiện ích Chrome</h3>
-                    <p className="text-[10px] text-indigo-100 italic">Nhấn để tải từng file</p>
-                  </div>
-                </div>
-                <button onClick={simulateExtensionPing} className="p-3 bg-white/20 rounded-xl hover:bg-white/30 transition-all flex items-center gap-2 text-[10px] font-black uppercase">
-                   <Signal size={16} /> Thử kết nối
-                </button>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <label className="text-[8px] font-black text-slate-400 uppercase block mb-0.5">Mã ca làm</label>
+                <input type="text" value={settings.shiftCode} onChange={(e) => setSettings({...settings, shiftCode: e.target.value})} className="w-full bg-transparent text-xl font-black text-indigo-600 outline-none" />
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-4 text-[10px] font-black uppercase">
-                <button 
-                  onClick={() => downloadExtensionFile('manifest.json', JSON.stringify({
-                    "manifest_version": 3,
-                    "name": "WorkTrack Auto-Clock",
-                    "version": "1.0",
-                    "description": "Tự động gửi tín hiệu chấm công khi mở trình duyệt",
-                    "permissions": ["storage", "alarms"],
-                    "background": { "service_worker": "background.js" }
-                  }, null, 2))}
-                  className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
-                >
-                  <FileJson size={18}/> manifest.json
-                </button>
-                <button 
-                  onClick={() => downloadExtensionFile('background.js', `// Kênh kết nối ảo đến App\nconst channel = new BroadcastChannel('worktrack_extension_channel');\n\nchrome.runtime.onInstalled.addListener(() => {\n  console.log("WorkTrack Extension Active");\n  pingApp();\n});\n\nfunction pingApp() {\n  channel.postMessage({ type: 'CLOCK_IN_PING' });\n}\n\n// Kiểm tra mỗi 60p\nchrome.alarms.create('checkPing', { periodInMinutes: 60 });\nchrome.alarms.onAlarm.addListener(() => pingApp());`)}
-                  className="bg-white/10 p-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2 border border-white/10"
-                >
-                  <FileCode size={18}/> background.js
-                </button>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <label className="text-[8px] font-black text-slate-400 uppercase block mb-0.5">Mục tiêu công</label>
+                <input type="number" value={settings.targetWorkingDays} onChange={(e) => setSettings({...settings, targetWorkingDays: Number(e.target.value)})} className="w-full bg-transparent text-xl font-black text-rose-500 outline-none" />
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 col-span-2">
+                <label className="text-[8px] font-black text-slate-400 uppercase block mb-0.5">Phép năm (có thể nhập số lẻ)</label>
+                <input type="number" step="0.5" value={settings.initialAnnualLeave} onChange={(e) => setSettings({...settings, initialAnnualLeave: Number(e.target.value)})} className="w-full bg-transparent text-xl font-black text-emerald-500 outline-none" />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-8">
-               <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Mã ca làm</label>
-                <input type="text" value={settings.shiftCode} onChange={(e) => setSettings({...settings, shiftCode: e.target.value.toUpperCase()})} className="w-full bg-transparent text-2xl font-black text-indigo-600 outline-none" />
-              </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Mục tiêu công</label>
-                <input type="number" step="0.5" value={settings.targetWorkingDays} onChange={(e) => setSettings({...settings, targetWorkingDays: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-rose-500 outline-none" />
-              </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Phép năm</label>
-                <input type="number" step="0.5" value={settings.initialAnnualLeave} onChange={(e) => setSettings({...settings, initialAnnualLeave: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-emerald-500 outline-none" />
-              </div>
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Thâm niên</label>
-                <input type="number" step="0.5" value={settings.seniorityDays} onChange={(e) => setSettings({...settings, seniorityDays: Number(e.target.value)})} className="w-full bg-transparent text-2xl font-black text-emerald-500 outline-none" />
-              </div>
+            <button onClick={() => setIsSettingsOpen(false)} className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl text-xs uppercase shadow-xl transition-all active:scale-95">Lưu & Đóng</button>
+          </div>
+        </div>
+      )}
+
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsAuthModalOpen(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setIsAuthModalOpen(false)} className="absolute top-6 right-6 p-2 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"><X size={20} /></button>
+            <div className="flex flex-col items-center mb-8">
+              <div className="bg-indigo-600 p-4 rounded-3xl text-white mb-4 shadow-xl"><Lock size={32} /></div>
+              <h2 className="text-2xl font-black uppercase text-slate-900 tracking-tight">Đồng bộ Google</h2>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1 text-center">Sử dụng tài khoản Google để lưu trữ dữ liệu vĩnh viễn</p>
             </div>
 
-            <div className="flex gap-3">
-              <button onClick={() => { setIsSettingsOpen(false); if (user) saveData(); }} className="flex-1 bg-slate-900 text-white font-black py-6 rounded-3xl text-sm uppercase shadow-2xl transition-all active:scale-95">Lưu & Đóng</button>
-              {user && (
-                <button onClick={fetchData} disabled={isSyncing} className="p-6 bg-slate-100 text-slate-600 rounded-3xl hover:bg-slate-200 transition-all active:scale-95 disabled:opacity-50">
-                  <RefreshCw size={24} className={isSyncing ? 'animate-spin' : ''} />
-                </button>
-              )}
-            </div>
+            <button onClick={handleGoogleLogin} className="flex items-center justify-center gap-3 w-full bg-white border-2 border-slate-100 text-slate-700 font-black py-4 rounded-2xl text-xs uppercase shadow-sm transition-all active:scale-95 hover:bg-slate-50">
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="google" />
+              Tiếp tục với Google
+            </button>
+
+            <p className="mt-6 text-[10px] text-slate-400 font-bold text-center uppercase leading-relaxed">
+              Dữ liệu của bạn sẽ được lưu trữ an toàn trên hệ thống đám mây của Google Firebase.
+            </p>
           </div>
         </div>
       )}
 
       {selectedDay && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={() => setSelectedDay(null)}>
-          <div className="bg-white w-full max-w-xl rounded-t-[3rem] md:rounded-[3rem] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-xl rounded-t-[3rem] md:rounded-[3rem] p-8 pb-[calc(env(safe-area-inset-bottom)+2rem)] shadow-2xl animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-black text-slate-900 uppercase mb-6 text-center tracking-tight">Cài đặt ngày {selectedDay}</h3>
             <div className="grid grid-cols-3 gap-2 mb-6 overflow-y-auto max-h-[40vh] p-1">
                 {[
