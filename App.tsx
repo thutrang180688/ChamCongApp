@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { DayType, AttendanceRecord, UserSettings } from './types';
-import { getDaysInMonth, formatId, VIETNAMESE_HOLIDAYS } from './utils/dateUtils';
+import { getDaysInMonth, formatId, getHolidayName } from './utils/dateUtils';
 import DashboardStats from './components/DashboardStats';
 import { 
   Calendar,
@@ -84,7 +84,7 @@ const App: React.FC = () => {
       days.forEach(d => {
         const id = formatId(d);
         const dayOfWeek = d.getDay();
-        const holidayName = VIETNAMESE_HOLIDAYS[id];
+        const holidayName = getHolidayName(d);
         
         let type = (dayOfWeek === 0 || dayOfWeek === 6) ? DayType.DAY_OFF : DayType.WORK;
         if (holidayName) type = DayType.PUBLIC_HOLIDAY;
@@ -127,7 +127,7 @@ const App: React.FC = () => {
       if (newAttendance[id]?.isManual) return; 
 
       const dayOfWeek = d.getDay();
-      const holidayName = VIETNAMESE_HOLIDAYS[id];
+      const holidayName = getHolidayName(d);
 
       newAttendance[id] = { ...newAttendance[id], isAutoClocked: false };
 
@@ -152,7 +152,7 @@ const App: React.FC = () => {
     }, 0);
 
     let currentTotal = calculateCurrentTotal();
-    const saturdays = daysInMonth.filter(d => d.getDay() === 6 && !VIETNAMESE_HOLIDAYS[formatId(d)] && !newAttendance[formatId(d)]?.isManual);
+    const saturdays = daysInMonth.filter(d => d.getDay() === 6 && !getHolidayName(d) && !newAttendance[formatId(d)]?.isManual);
 
     for (const sat of saturdays) {
       if (currentTotal >= target || remainingAL <= 0) break;
@@ -287,6 +287,7 @@ const App: React.FC = () => {
       const id = formatId(date);
       const record = attendance[id];
       if (!record) return;
+      const holiday = getHolidayName(date);
       const isCountable = [DayType.WORK, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SH].includes(record.type);
       const isHalfCountable = [DayType.HALF_ANNUAL_LEAVE, DayType.HALF_WORK].includes(record.type);
 
@@ -391,7 +392,7 @@ const App: React.FC = () => {
               const id = formatId(date);
               const record = attendance[id];
               const isToday = id === formatId(new Date());
-              const holiday = VIETNAMESE_HOLIDAYS[id];
+              const holiday = getHolidayName(date);
               const isSunday = date.getDay() === 0;
               const hasNote = record?.note && record.note !== holiday;
               
