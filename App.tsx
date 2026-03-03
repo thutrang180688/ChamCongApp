@@ -32,7 +32,8 @@ import {
   getFirestore, 
   doc, 
   setDoc, 
-  getDoc 
+  getDoc,
+  onSnapshot 
 } from "firebase/firestore";
 
 // Firebase configuration (User should replace with their own)
@@ -71,7 +72,10 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
+  const [lastCloudSync, setLastCloudSync] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isInitialMount = useRef(true);
+  const skipNextSync = useRef(false);
 
   const STORAGE_KEY = 'worktrack_pro_local_v1';
   const SETTINGS_KEY = 'worktrack_pro_settings_v1';
@@ -124,6 +128,7 @@ const App: React.FC = () => {
 
     daysInMonth.forEach(d => {
       const id = formatId(d);
+      // Preserve manual entries
       if (newAttendance[id]?.isManual) return; 
 
       const dayOfWeek = d.getDay();
@@ -152,20 +157,26 @@ const App: React.FC = () => {
     }, 0);
 
     let currentTotal = calculateCurrentTotal();
-    const saturdays = daysInMonth.filter(d => d.getDay() === 6 && !getHolidayName(d) && !newAttendance[formatId(d)]?.isManual);
+    const saturdays = daysInMonth.filter(d => d.getDay() === 6 && !getHolidayName(d));
 
+    // Fill Saturdays with AL if needed and available
     for (const sat of saturdays) {
-      if (currentTotal >= target || remainingAL <= 0) break;
       const id = formatId(sat);
+      if (newAttendance[id]?.isManual) continue;
+      if (currentTotal >= target || remainingAL <= 0) break;
+      
       newAttendance[id] = { ...newAttendance[id], type: DayType.ANNUAL_LEAVE };
       if (id === todayStr) newAttendance[id].isAutoClocked = true;
       currentTotal += 1;
       remainingAL -= 1;
     }
 
+    // Fill remaining Saturdays with WORK if still below target
     for (const sat of saturdays) {
-      if (currentTotal >= target) break;
       const id = formatId(sat);
+      if (newAttendance[id]?.isManual) continue;
+      if (currentTotal >= target) break;
+      
       if (newAttendance[id].type === DayType.DAY_OFF) {
         newAttendance[id] = { ...newAttendance[id], type: DayType.WORK };
         if (id === todayStr) newAttendance[id].isAutoClocked = true;
@@ -183,7 +194,6 @@ const App: React.FC = () => {
       setUser(result.user);
       setIsAuthModalOpen(false);
       triggerToast(`Chào mừng, ${result.user.displayName}!`);
-      fetchCloudData(result.user.uid);
     } catch (err: any) {
       triggerToast("Đăng nhập thất bại: " + err.message);
     }
@@ -199,51 +209,72 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchCloudData = async (uid: string) => {
-    setIsSyncing(true);
-    try {
-      const docRef = doc(db, "users", uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.attendance) setAttendance(data.attendance);
-        if (data.settings) setSettings(data.settings);
-        triggerToast("Đã đồng bộ dữ liệu từ đám mây.");
-      }
-    } catch (err) {
-      console.error("Sync failed:", err);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const syncToCloud = async () => {
+  const syncToCloud = useCallback(async (dataToSync?: { attendance?: any, settings?: any }) => {
     if (!user) return;
     setIsSyncing(true);
     try {
-      await setDoc(doc(db, "users", user.uid), {
-        attendance,
-        settings,
+      const payload = {
+        attendance: dataToSync?.attendance || attendance,
+        settings: dataToSync?.settings || settings,
         lastSynced: new Date().toISOString()
-      }, { merge: true });
-      triggerToast("Đã lưu dữ liệu lên đám mây.");
+      };
+      await setDoc(doc(db, "users", user.uid), payload, { merge: true });
+      setLastCloudSync(new Date().toLocaleTimeString());
     } catch (err) {
-      triggerToast("Đồng bộ thất bại.");
+      console.error("Sync to cloud failed:", err);
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [user, attendance, settings]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    let unsubscribe: () => void = () => {};
+    
+    const authUnsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        fetchCloudData(currentUser.uid);
+        // Set up real-time listener
+        const docRef = doc(db, "users", currentUser.uid);
+        unsubscribe = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            
+            // Only update if the data is different to avoid infinite loops
+            if (data.attendance) {
+              setAttendance(prev => {
+                const isDifferent = JSON.stringify(prev) !== JSON.stringify(data.attendance);
+                if (isDifferent) {
+                  skipNextSync.current = true; // Don't trigger a cloud sync from this local update
+                  return data.attendance;
+                }
+                return prev;
+              });
+            }
+            if (data.settings) {
+              setSettings(prev => {
+                const isDifferent = JSON.stringify(prev) !== JSON.stringify(data.settings);
+                if (isDifferent) {
+                  skipNextSync.current = true;
+                  return data.settings;
+                }
+                return prev;
+              });
+            }
+            setLastCloudSync(new Date().toLocaleTimeString());
+          }
+        });
+      } else {
+        unsubscribe();
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      authUnsubscribe();
+      unsubscribe();
+    };
   }, []);
 
+  // Load initial data from localStorage
   useEffect(() => {
     const storedSettings = localStorage.getItem(SETTINGS_KEY);
     const storedData = localStorage.getItem(STORAGE_KEY);
@@ -253,14 +284,39 @@ const App: React.FC = () => {
     } else {
       setAttendance(generateInitialData(currentDate.getFullYear()));
     }
+    isInitialMount.current = false;
   }, [generateInitialData]);
 
+  // Save to localStorage and auto-sync to cloud
   useEffect(() => {
-    if (Object.keys(attendance).length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(attendance));
-    }
+    if (isInitialMount.current) return;
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(attendance));
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [attendance, settings]);
+
+    if (user && !skipNextSync.current) {
+      const timeoutId = setTimeout(() => {
+        syncToCloud();
+      }, 2000); // Debounce sync
+      return () => clearTimeout(timeoutId);
+    }
+    
+    if (skipNextSync.current) {
+      skipNextSync.current = false;
+    }
+  }, [attendance, settings, user, syncToCloud]);
+
+  // Handle visibility change to ensure data is fresh
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        // Re-trigger sync/fetch if needed
+        setLastCloudSync(prev => prev ? `${prev} (Refreshed)` : 'Refreshing...');
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
 
   const calendarGrid = useMemo(() => {
     const month = currentDate.getMonth();
@@ -324,9 +380,17 @@ const App: React.FC = () => {
   const updateDay = (dateStr: string, type: DayType) => {
     setAttendance(prev => ({ 
       ...prev, 
-      [dateStr]: { ...prev[dateStr], type, isManual: true, isAutoClocked: false, note: tempNote } 
+      [dateStr]: { 
+        ...prev[dateStr], 
+        date: dateStr, // Ensure date is set
+        type, 
+        isManual: true, 
+        isAutoClocked: false, 
+        note: tempNote 
+      } 
     }));
     setSelectedDay(null);
+    triggerToast(`Đã cập nhật ngày ${dateStr}`);
   };
 
   const getDayLabel = (type: DayType) => {
@@ -350,7 +414,12 @@ const App: React.FC = () => {
           <div className="flex items-center gap-2">
             <div className="bg-indigo-600 p-1.5 rounded-lg text-white shadow-md"><Calendar size={16} /></div>
             <div className="flex flex-col">
-              <h1 className="font-black text-[8px] uppercase text-slate-400 tracking-wider -mb-0.5">Chấm công {currentDate.getFullYear()}</h1>
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-black text-[8px] uppercase text-slate-400 tracking-wider">Chấm công {currentDate.getFullYear()}</h1>
+                {user && (
+                  <div className={`w-1.5 h-1.5 rounded-full ${isSyncing ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} title={isSyncing ? 'Đang đồng bộ...' : 'Đã đồng bộ'} />
+                )}
+              </div>
               <p className="font-black text-xs md:text-base uppercase text-slate-900 tracking-tighter truncate max-w-[120px] md:max-w-md">
                 <span className="text-indigo-600">{settings.userName || 'Người dùng'}</span>
               </p>
@@ -464,13 +533,16 @@ const App: React.FC = () => {
                           ) : (
                             <Cloud size={16} className="text-emerald-500" />
                           )}
-                          <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">{user.displayName || user.email}</span>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-700 truncate max-w-[120px]">{user.displayName || user.email}</span>
+                            {lastCloudSync && <span className="text-[8px] text-slate-400 font-medium">Đã đồng bộ: {lastCloudSync}</span>}
+                          </div>
                         </div>
                         <button onClick={handleLogout} className="text-rose-500 hover:text-rose-600 transition-colors">
                           <LogOut size={16} />
                         </button>
                       </div>
-                      <button onClick={syncToCloud} disabled={isSyncing} className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase shadow-md active:scale-95 disabled:opacity-50">
+                      <button onClick={() => syncToCloud()} disabled={isSyncing} className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase shadow-md active:scale-95 disabled:opacity-50">
                         <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} /> {isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}
                       </button>
                     </div>
